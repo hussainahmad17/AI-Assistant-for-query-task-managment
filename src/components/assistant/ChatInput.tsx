@@ -1,16 +1,19 @@
 
-import { useState, FormEvent } from "react";
+import { useState, FormEvent, useRef, useEffect } from "react";
 import { motion, AnimatePresence } from "framer-motion";
 import { Button } from "@/components/ui/button";
 import { Textarea } from "@/components/ui/textarea";
-import { Mic, MicOff, Send } from "lucide-react";
+import { Mic, MicOff, Send, Loader2 } from "lucide-react";
 import { useAssistant } from "@/contexts/AssistantContext";
 import { useHistory } from "@/contexts/HistoryContext";
+import { useToast } from "@/hooks/use-toast";
 
 export const ChatInput = () => {
   const [input, setInput] = useState("");
   const { isProcessing, sendMessage, isListening, toggleListening } = useAssistant();
   const { addToHistory } = useHistory();
+  const { toast } = useToast();
+  const textareaRef = useRef<HTMLTextAreaElement>(null);
 
   const handleSubmit = async (e: FormEvent) => {
     e.preventDefault();
@@ -25,6 +28,22 @@ export const ChatInput = () => {
     await sendMessage(message);
   };
 
+  // Focus the textarea when not listening
+  useEffect(() => {
+    if (!isListening && textareaRef.current) {
+      textareaRef.current.focus();
+    }
+  }, [isListening]);
+
+  // Auto-resize the textarea as content grows
+  const handleTextareaChange = (e: React.ChangeEvent<HTMLTextAreaElement>) => {
+    setInput(e.target.value);
+    if (textareaRef.current) {
+      textareaRef.current.style.height = "auto";
+      textareaRef.current.style.height = `${Math.min(textareaRef.current.scrollHeight, 200)}px`;
+    }
+  };
+
   return (
     <motion.div
       initial={{ opacity: 0, y: 20 }}
@@ -33,10 +52,18 @@ export const ChatInput = () => {
     >
       <form onSubmit={handleSubmit} className="flex flex-col">
         <Textarea
-          placeholder="Ask me anything..."
+          ref={textareaRef}
+          placeholder={isListening ? "Listening to your voice..." : "Ask me anything..."}
           value={input}
-          onChange={(e) => setInput(e.target.value)}
-          className="min-h-[100px] border-0 resize-none focus-visible:ring-0 focus-visible:ring-offset-0"
+          onChange={handleTextareaChange}
+          className={`min-h-[60px] border-0 resize-none focus-visible:ring-0 focus-visible:ring-offset-0 transition-all duration-200 ${isListening ? 'bg-muted' : ''}`}
+          disabled={isListening}
+          onKeyDown={(e) => {
+            if (e.key === 'Enter' && !e.shiftKey) {
+              e.preventDefault();
+              handleSubmit(e);
+            }
+          }}
         />
         
         <div className="flex items-center justify-between p-3 border-t">
@@ -72,8 +99,12 @@ export const ChatInput = () => {
                 initial={{ opacity: 0 }}
                 animate={{ opacity: 1 }}
                 exit={{ opacity: 0 }}
-                className="text-sm text-muted-foreground animate-pulse"
+                className="text-sm text-primary font-medium flex items-center gap-2"
               >
+                <span className="relative flex h-3 w-3">
+                  <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-primary opacity-75"></span>
+                  <span className="relative inline-flex rounded-full h-3 w-3 bg-primary"></span>
+                </span>
                 Listening...
               </motion.div>
             )}
@@ -85,11 +116,15 @@ export const ChatInput = () => {
           >
             <Button
               type="submit"
-              disabled={!input.trim() || isProcessing}
+              disabled={(!input.trim() && !isListening) || isProcessing}
               className="rounded-full"
             >
-              <Send size={18} className="mr-2" />
-              Send
+              {isProcessing ? (
+                <Loader2 size={18} className="mr-2 animate-spin" />
+              ) : (
+                <Send size={18} className="mr-2" />
+              )}
+              {isProcessing ? "Processing..." : "Send"}
             </Button>
           </motion.div>
         </div>

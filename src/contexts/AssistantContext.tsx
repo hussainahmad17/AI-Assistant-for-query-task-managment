@@ -35,36 +35,46 @@ export function AssistantProvider({ children }: { children: ReactNode }) {
   
   // Speech synthesis
   const speechSynthesis = window.speechSynthesis;
-  let recognition: SpeechRecognition | null = null;
+  const [recognition, setRecognition] = useState<SpeechRecognition | null>(null);
 
   // Initialize speech recognition if available
   useEffect(() => {
-    if ('SpeechRecognition' in window || 'webkitSpeechRecognition' in window) {
+    try {
+      // Check if SpeechRecognition is available
       const SpeechRecognition = window.SpeechRecognition || window.webkitSpeechRecognition;
-      recognition = new SpeechRecognition();
-      recognition.continuous = false;
-      recognition.interimResults = false;
       
-      recognition.onresult = (event) => {
-        const transcript = event.results[0][0].transcript;
-        addMessage(transcript, 'user');
-        sendMessage(transcript);
-        setIsListening(false);
-      };
-      
-      recognition.onerror = (event) => {
-        console.error('Speech recognition error', event.error);
-        setIsListening(false);
-        toast({
-          title: 'Voice Input Error',
-          description: `Error: ${event.error}`,
-          variant: 'destructive',
-        });
-      };
-      
-      recognition.onend = () => {
-        setIsListening(false);
-      };
+      if (SpeechRecognition) {
+        const recognitionInstance = new SpeechRecognition();
+        recognitionInstance.continuous = false;
+        recognitionInstance.interimResults = false;
+        
+        recognitionInstance.onresult = (event) => {
+          const transcript = event.results[0][0].transcript;
+          addMessage(transcript, 'user');
+          sendMessage(transcript);
+          setIsListening(false);
+        };
+        
+        recognitionInstance.onerror = (event) => {
+          console.error('Speech recognition error', event.error);
+          setIsListening(false);
+          toast({
+            title: 'Voice Input Error',
+            description: `Error: ${event.error}`,
+            variant: 'destructive',
+          });
+        };
+        
+        recognitionInstance.onend = () => {
+          setIsListening(false);
+        };
+        
+        setRecognition(recognitionInstance);
+      } else {
+        console.warn('Speech Recognition API not supported in this browser');
+      }
+    } catch (error) {
+      console.error('Error initializing speech recognition:', error);
     }
   }, []);
   
@@ -105,7 +115,7 @@ export function AssistantProvider({ children }: { children: ReactNode }) {
     if (!recognition) {
       toast({
         title: 'Speech Recognition Unavailable',
-        description: 'Your browser does not support speech recognition.',
+        description: 'Your browser does not support speech recognition. Try using Chrome or Edge.',
         variant: 'destructive',
       });
       return;
@@ -118,8 +128,14 @@ export function AssistantProvider({ children }: { children: ReactNode }) {
       try {
         recognition.start();
         setIsListening(true);
+        toast({
+          title: 'Listening...',
+          description: 'Speak now. I\'m listening to your voice input.',
+          variant: 'default',
+        });
       } catch (error) {
         console.error('Failed to start speech recognition', error);
+        setIsListening(false);
         toast({
           title: 'Speech Recognition Error',
           description: 'Failed to start speech recognition. Please try again.',

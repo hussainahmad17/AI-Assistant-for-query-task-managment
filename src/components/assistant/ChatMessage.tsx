@@ -4,6 +4,7 @@ import { Volume2, VolumeX } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Avatar } from "@/components/ui/avatar";
 import { useAssistant } from "@/contexts/AssistantContext";
+import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from "@/components/ui/tooltip";
 
 interface ChatMessageProps {
   content: string;
@@ -39,21 +40,30 @@ export const ChatMessage = ({ content, role, timestamp, isLastMessage }: ChatMes
       <div className={`flex flex-col max-w-[80%] space-y-2 ${isAssistant ? '' : 'items-end'}`}>
         <div className={`rounded-lg p-3 ${
           isAssistant 
-            ? 'bg-card border text-card-foreground' 
+            ? 'bg-card border text-card-foreground shadow-sm' 
             : 'bg-primary text-primary-foreground'
         }`}>
           <p className="whitespace-pre-wrap">{content}</p>
           
           {isAssistant && isLastMessage && (
             <div className="flex justify-end mt-2">
-              <Button 
-                variant="ghost"
-                size="sm"
-                className="h-6 px-2 text-muted-foreground hover:text-foreground"
-                onClick={stopSpeaking}
-              >
-                {isSpeaking ? <VolumeX size={14} /> : <Volume2 size={14} />}
-              </Button>
+              <TooltipProvider>
+                <Tooltip>
+                  <TooltipTrigger asChild>
+                    <Button 
+                      variant="ghost"
+                      size="sm"
+                      className="h-6 px-2 text-muted-foreground hover:text-foreground"
+                      onClick={stopSpeaking}
+                    >
+                      {isSpeaking ? <VolumeX size={14} /> : <Volume2 size={14} />}
+                    </Button>
+                  </TooltipTrigger>
+                  <TooltipContent>
+                    <p>{isSpeaking ? 'Stop speaking' : 'Read aloud'}</p>
+                  </TooltipContent>
+                </Tooltip>
+              </TooltipProvider>
             </div>
           )}
         </div>
