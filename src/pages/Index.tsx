@@ -6,7 +6,9 @@ const Index = () => {
   const navigate = useNavigate();
   
   useEffect(() => {
-    navigate("/");
+    // Change to navigate to the landing page instead of "/"
+    // to avoid circular redirection
+    navigate("/landing");
   }, [navigate]);
   
   return null;
