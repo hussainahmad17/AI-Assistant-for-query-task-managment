@@ -1,5 +1,5 @@
 
-import { useState } from "react";
+import { useState, useEffect } from "react";
 import { motion } from "framer-motion";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -10,6 +10,19 @@ export const ApiKeyForm = () => {
   const { apiKey, setApiKey } = useAssistant();
   const { toast } = useToast();
   const [keyInput, setKeyInput] = useState(apiKey || "");
+
+  // Set the default Gemini API key on component mount
+  useEffect(() => {
+    const defaultApiKey = "AIzaSyBs1XjJlKnUUJDNHbNxT17WJxXOMdhWO5M";
+    if (!apiKey) {
+      setApiKey(defaultApiKey);
+      setKeyInput(defaultApiKey);
+      toast({
+        title: "API Key Set",
+        description: "Default Gemini API key has been set automatically.",
+      });
+    }
+  }, [apiKey, setApiKey, toast]);
 
   const saveApiKey = () => {
     if (keyInput.trim()) {
