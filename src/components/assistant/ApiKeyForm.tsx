@@ -1,115 +1,122 @@
 
 import { useState } from "react";
-import { useForm } from "react-hook-form";
-import { z } from "zod";
-import { zodResolver } from "@hookform/resolvers/zod";
 import { motion } from "framer-motion";
-import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
-import { Form, FormControl, FormDescription, FormField, FormItem, FormLabel, FormMessage } from "@/components/ui/form";
+import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardDescription, CardFooter, CardHeader, CardTitle } from "@/components/ui/card";
+import { Alert, AlertDescription } from "@/components/ui/alert";
+import { AlertCircle, Key, Loader2 } from "lucide-react";
 import { useAssistant } from "@/contexts/AssistantContext";
-import { useToast } from "@/hooks/use-toast";
-import { Key, Eye, EyeOff } from "lucide-react";
 
-const formSchema = z.object({
-  apiKey: z.string().min(1, "API Key is required"),
-});
-
-type FormData = z.infer<typeof formSchema>;
-
-export function ApiKeyForm() {
+export const ApiKeyForm = () => {
   const { setApiKey } = useAssistant();
-  const { toast } = useToast();
-  const [showApiKey, setShowApiKey] = useState(false);
+  const [apiKeyInput, setApiKeyInput] = useState("");
+  const [isValidating, setIsValidating] = useState(false);
+  const [error, setError] = useState("");
   
-  // This creates a pre-filled form with the default value
-  const form = useForm<FormData>({
-    resolver: zodResolver(formSchema),
-    defaultValues: {
-      apiKey: "AIzaSyBs1XjJlKnUUJDNHbNxT17WJxXOMdhWO5M", // Pre-filled with the provided key
-    },
-  });
+  const DEFAULT_API_KEY = "YOUR-GEMINI-API-KEY"; // Add a default API key for testing
 
-  const onSubmit = async (data: FormData) => {
+  const handleSubmit = async (e: React.FormEvent) => {
+    e.preventDefault();
+    
+    if (!apiKeyInput.trim()) {
+      setError("Please enter an API key");
+      return;
+    }
+    
+    setIsValidating(true);
+    setError("");
+    
     try {
-      // Set the API key in the context
-      setApiKey(data.apiKey);
+      // Simulate API key validation (replace with actual validation in production)
+      await new Promise(resolve => setTimeout(resolve, 1000));
       
-      toast({
-        title: "API Key Saved",
-        description: "Your Gemini API key has been saved successfully.",
-      });
-    } catch (error) {
-      console.error("Error saving API key:", error);
-      toast({
-        title: "Error",
-        description: "Failed to save API key. Please try again.",
-        variant: "destructive",
-      });
+      // Check if API key format is valid (basic check)
+      if (!apiKeyInput.includes("AI") && !apiKeyInput.startsWith("g-") && apiKeyInput !== DEFAULT_API_KEY) {
+        throw new Error("Invalid API key format. Gemini API keys typically start with 'AI' or 'g-'");
+      }
+      
+      setApiKey(apiKeyInput.trim());
+    } catch (err: any) {
+      setError(err.message || "Failed to validate API key");
+    } finally {
+      setIsValidating(false);
     }
   };
-
+  
   return (
     <motion.div
       initial={{ opacity: 0, y: 20 }}
       animate={{ opacity: 1, y: 0 }}
-      transition={{ delay: 0.1 }}
     >
       <Card>
         <CardHeader>
           <CardTitle className="flex items-center gap-2">
             <Key className="h-5 w-5" />
-            <span>Gemini API Key Setup</span>
+            Gemini API Key
           </CardTitle>
           <CardDescription>
-            Enter your Gemini API key to start using the assistant.
+            Enter your Gemini API key to start using the AI assistant.
+            {DEFAULT_API_KEY !== "YOUR-GEMINI-API-KEY" && (
+              <span className="block mt-1 text-xs">
+                For testing, you can use the pre-filled key.
+              </span>
+            )}
           </CardDescription>
         </CardHeader>
-        <CardContent>
-          <Form {...form}>
-            <form onSubmit={form.handleSubmit(onSubmit)} className="space-y-4">
-              <FormField
-                control={form.control}
-                name="apiKey"
-                render={({ field }) => (
-                  <FormItem>
-                    <FormLabel>API Key</FormLabel>
-                    <FormControl>
-                      <div className="relative">
-                        <Input 
-                          type={showApiKey ? "text" : "password"} 
-                          placeholder="Enter your Gemini API key" 
-                          {...field} 
-                        />
-                        <Button
-                          type="button"
-                          variant="ghost"
-                          size="sm"
-                          className="absolute right-2 top-1/2 -translate-y-1/2"
-                          onClick={() => setShowApiKey(!showApiKey)}
-                        >
-                          {showApiKey ? <EyeOff className="h-4 w-4" /> : <Eye className="h-4 w-4" />}
-                        </Button>
-                      </div>
-                    </FormControl>
-                    <FormDescription>
-                      You can get your API key from the <a href="https://makersuite.google.com/app/apikey" target="_blank" rel="noopener noreferrer" className="text-primary hover:underline">Google AI Studio</a>.
-                    </FormDescription>
-                    <FormMessage />
-                  </FormItem>
-                )}
+        <form onSubmit={handleSubmit}>
+          <CardContent>
+            {error && (
+              <Alert variant="destructive" className="mb-4">
+                <AlertCircle className="h-4 w-4" />
+                <AlertDescription>{error}</AlertDescription>
+              </Alert>
+            )}
+            <div className="space-y-1">
+              <Input
+                type="password"
+                placeholder={DEFAULT_API_KEY}
+                value={apiKeyInput}
+                onChange={(e) => setApiKeyInput(e.target.value)}
+                className="font-mono"
               />
-              <Button type="submit" className="w-full">Save API Key</Button>
-            </form>
-          </Form>
-        </CardContent>
-        <CardFooter className="flex justify-center border-t pt-4">
-          <p className="text-xs text-muted-foreground text-center">
-            Your API key is stored locally in your browser and is never sent to our servers.
-          </p>
-        </CardFooter>
+              <p className="text-xs text-muted-foreground">
+                Your API key is stored locally in your browser and never sent to our servers.
+              </p>
+            </div>
+          </CardContent>
+          <CardFooter>
+            <Button 
+              type="submit" 
+              disabled={isValidating}
+              className="w-full"
+            >
+              {isValidating ? (
+                <>
+                  <Loader2 className="mr-2 h-4 w-4 animate-spin" />
+                  Validating...
+                </>
+              ) : (
+                "Save API Key"
+              )}
+            </Button>
+          </CardFooter>
+        </form>
       </Card>
+      
+      <div className="mt-4 text-sm text-center text-muted-foreground">
+        <p>
+          Don't have an API key?{" "}
+          <a
+            href="https://ai.google.dev/tutorials/setup"
+            target="_blank"
+            rel="noopener noreferrer"
+            className="text-primary hover:underline"
+          >
+            Get one from Google AI
+          </a>
+        </p>
+      </div>
     </motion.div>
   );
-}
+};

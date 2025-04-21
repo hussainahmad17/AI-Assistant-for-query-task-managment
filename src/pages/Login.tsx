@@ -9,13 +9,11 @@ import { useToast } from "@/hooks/use-toast";
 import { Eye, EyeOff } from "lucide-react";
 import { useAuth } from "@/contexts/AuthContext";
 
-const ADMIN_EMAIL = "hussainahmad.dev.17@gmail.com";
-
 const Login = () => {
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
   const [showPassword, setShowPassword] = useState(false);
-  const { signIn, loading, user } = useAuth();
+  const { signIn, loading } = useAuth();
   const { toast } = useToast();
   const navigate = useNavigate();
 
@@ -34,12 +32,9 @@ const Login = () => {
         title: "Login successful",
         description: "Welcome back!",
       });
-
-      if (email === ADMIN_EMAIL) {
-        navigate("/admin");
-      } else {
-        navigate("/chat");
-      }
+      
+      // Redirect all users to the chat page after login
+      navigate("/chat");
     }
   };
 

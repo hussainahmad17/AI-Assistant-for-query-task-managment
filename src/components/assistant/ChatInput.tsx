@@ -3,17 +3,31 @@ import { useState, FormEvent, useRef, useEffect } from "react";
 import { motion, AnimatePresence } from "framer-motion";
 import { Button } from "@/components/ui/button";
 import { Textarea } from "@/components/ui/textarea";
-import { Mic, MicOff, Send, Loader2 } from "lucide-react";
+import { Mic, MicOff, Send, Loader2, AlertCircle } from "lucide-react";
 import { useAssistant } from "@/contexts/AssistantContext";
 import { useHistory } from "@/contexts/HistoryContext";
 import { useToast } from "@/hooks/use-toast";
 
 export const ChatInput = () => {
   const [input, setInput] = useState("");
+  const [isSpeechSupported, setIsSpeechSupported] = useState<boolean | null>(null);
   const { isProcessing, sendMessage, isListening, toggleListening } = useAssistant();
   const { addToHistory } = useHistory();
   const { toast } = useToast();
   const textareaRef = useRef<HTMLTextAreaElement>(null);
+
+  // Check if speech recognition is supported
+  useEffect(() => {
+    const isSpeechRecognitionSupported = 
+      'SpeechRecognition' in window || 
+      'webkitSpeechRecognition' in window;
+    
+    setIsSpeechSupported(isSpeechRecognitionSupported);
+    
+    if (!isSpeechRecognitionSupported) {
+      console.log("Speech recognition is not supported in this browser");
+    }
+  }, []);
 
   const handleSubmit = async (e: FormEvent) => {
     e.preventDefault();
@@ -42,6 +56,19 @@ export const ChatInput = () => {
       textareaRef.current.style.height = "auto";
       textareaRef.current.style.height = `${Math.min(textareaRef.current.scrollHeight, 200)}px`;
     }
+  };
+
+  const handleVoiceToggle = () => {
+    if (!isSpeechSupported && !isListening) {
+      toast({
+        title: "Speech Recognition Unavailable",
+        description: "Your browser does not support speech recognition. Try using Chrome, Edge, or Safari.",
+        variant: "destructive",
+      });
+      return;
+    }
+    
+    toggleListening();
   };
 
   return (
@@ -74,11 +101,14 @@ export const ChatInput = () => {
             <Button
               type="button"
               size="icon"
-              variant={isListening ? "destructive" : "secondary"}
-              onClick={toggleListening}
-              className="rounded-full"
+              variant={isListening ? "destructive" : isSpeechSupported ? "secondary" : "outline"}
+              onClick={handleVoiceToggle}
+              className="rounded-full relative"
               disabled={isProcessing}
             >
+              {!isSpeechSupported && !isListening && (
+                <span className="absolute -top-1 -right-1 w-3 h-3 bg-destructive rounded-full border-2 border-background" />
+              )}
               <AnimatePresence mode="wait">
                 <motion.div
                   key={isListening ? "listening" : "not-listening"}
