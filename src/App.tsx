@@ -1,4 +1,3 @@
-
 import { Toaster } from "@/components/ui/toaster";
 import { Toaster as Sonner } from "@/components/ui/sonner";
 import { TooltipProvider } from "@/components/ui/tooltip";
@@ -24,12 +23,10 @@ import { AuthProvider, useAuth } from "./contexts/AuthContext";
 import { useState } from "react";
 
 // RequireAuth wrapper component
-function RequireAuth({ children, adminOnly = false }: { children: React.ReactNode; adminOnly?: boolean }) {
+function RequireAuth({ children }: { children: React.ReactNode }) {
   const { user, loading } = useAuth();
-  const ADMIN_EMAIL = "hussainahmad.dev.17@gmail.com";
   if (loading) return null; // Or add a loading spinner
   if (!user) return <Navigate to="/auth/login" replace />;
-  if (adminOnly && user.email !== ADMIN_EMAIL) return <Navigate to="/chat" replace />;
   return <>{children}</>;
 }
 
@@ -74,7 +71,7 @@ const App = () => {
                   <Route
                     path="/admin"
                     element={
-                      <RequireAuth adminOnly>
+                      <RequireAuth>
                         <Admin />
                       </RequireAuth>
                     }
