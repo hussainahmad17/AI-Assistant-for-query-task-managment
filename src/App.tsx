@@ -21,7 +21,7 @@ import Register from "./pages/Register";
 import { AssistantProvider } from "./contexts/AssistantContext";
 import { HistoryProvider } from "./contexts/HistoryContext";
 import { AuthProvider, useAuth } from "./contexts/AuthContext";
-import { useEffect } from "react";
+import { useState } from "react";
 
 // RequireAuth wrapper component
 function RequireAuth({ children, adminOnly = false }: { children: React.ReactNode; adminOnly?: boolean }) {
@@ -33,10 +33,10 @@ function RequireAuth({ children, adminOnly = false }: { children: React.ReactNod
   return <>{children}</>;
 }
 
-const queryClient = new QueryClient();
-
 const App = () => {
-  // Remove the useEffect that was causing issues and log directly
+  // Create the query client inside the component
+  const [queryClient] = useState(() => new QueryClient());
+  
   console.log("App initialized");
 
   return (
