@@ -1,5 +1,6 @@
 
 import React, { createContext, useContext, useState, useEffect, ReactNode } from 'react';
+import { supabase } from "@/integrations/supabase/client";
 
 interface HistoryItem {
   id: string;
@@ -39,6 +40,8 @@ export function HistoryProvider({ children }: { children: ReactNode }) {
         setHistory(formattedHistory);
       } catch (error) {
         console.error('Failed to parse history from localStorage', error);
+        // Fallback to empty array if parsing fails
+        setHistory([]);
       }
     }
   }, []);
@@ -50,6 +53,8 @@ export function HistoryProvider({ children }: { children: ReactNode }) {
 
   // Add a new query to history
   const addToHistory = (query: string) => {
+    if (!query.trim()) return; // Don't add empty queries
+    
     const newItem: HistoryItem = {
       id: Date.now().toString(),
       query,
@@ -61,6 +66,7 @@ export function HistoryProvider({ children }: { children: ReactNode }) {
   // Clear all history
   const clearHistory = () => {
     setHistory([]);
+    localStorage.removeItem('assistant_history');
   };
 
   // Get the top most frequent queries
@@ -83,7 +89,7 @@ export function HistoryProvider({ children }: { children: ReactNode }) {
     const now = new Date();
     const monthsData: Record<string, number> = {};
     
-    // Initialize last 6 months
+    // Initialize last 6 months with 0 counts
     for (let i = 5; i >= 0; i--) {
       const month = new Date(now.getFullYear(), now.getMonth() - i, 1);
       const monthLabel = month.toLocaleString('default', { month: 'short' });
@@ -92,7 +98,8 @@ export function HistoryProvider({ children }: { children: ReactNode }) {
     
     // Count queries by month
     history.forEach((item) => {
-      const itemMonth = item.timestamp.toLocaleString('default', { month: 'short' });
+      const itemDate = item.timestamp;
+      const itemMonth = itemDate.toLocaleString('default', { month: 'short' });
       if (monthsData[itemMonth] !== undefined) {
         monthsData[itemMonth]++;
       }

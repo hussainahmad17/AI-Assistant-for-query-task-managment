@@ -7,14 +7,17 @@ import { QueryChart } from "@/components/analytics/QueryChart";
 import { TopQueriesList } from "@/components/analytics/TopQueriesList";
 import { MessageSquare, Clock, Zap, Users } from "lucide-react";
 import { useHistory } from "@/contexts/HistoryContext";
+import { useToast } from "@/components/ui/use-toast";
 
 const Dashboard = () => {
   const { history } = useHistory();
+  const { toast } = useToast();
   
   useEffect(() => {
     document.title = "Analytics Dashboard - Personal Assistant";
   }, []);
   
+  // Calculate total queries
   const totalQueries = history.length;
   
   // Calculate queries in the last 24 hours
@@ -25,10 +28,34 @@ const Dashboard = () => {
   ).length;
   
   // Calculate average response time (simulated)
-  const avgResponseTime = "1.2s";
+  // This would ideally come from actual response time tracking
+  const avgResponseTime = history.length > 0 ? "1.2s" : "0s";
   
   // Calculate user satisfaction (simulated)
-  const userSatisfaction = "95%";
+  // In a real app, this would be from user feedback
+  const userSatisfaction = history.length > 0 ? "95%" : "0%";
+
+  // Calculate month-over-month growth (trend)
+  const calculateTrend = () => {
+    if (history.length === 0) return 0;
+    
+    const now = new Date();
+    const thisMonth = now.getMonth();
+    const lastMonth = thisMonth === 0 ? 11 : thisMonth - 1;
+    
+    const thisMonthQueries = history.filter(item => 
+      new Date(item.timestamp).getMonth() === thisMonth
+    ).length;
+    
+    const lastMonthQueries = history.filter(item => 
+      new Date(item.timestamp).getMonth() === lastMonth
+    ).length;
+    
+    if (lastMonthQueries === 0) return thisMonthQueries > 0 ? 100 : 0;
+    return Math.round(((thisMonthQueries - lastMonthQueries) / lastMonthQueries) * 100);
+  };
+  
+  const trend = calculateTrend();
   
   return (
     <DashboardLayout>
@@ -44,7 +71,7 @@ const Dashboard = () => {
             value={totalQueries}
             icon={<MessageSquare className="h-4 w-4" />}
             description="All-time queries processed"
-            trend={12}
+            trend={trend}
             trendLabel="vs last month"
           />
           
@@ -74,9 +101,13 @@ const Dashboard = () => {
           />
         </div>
         
-        <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
-          <QueryChart />
-          <TopQueriesList />
+        <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
+          <div className="lg:col-span-2">
+            <QueryChart />
+          </div>
+          <div className="lg:col-span-1">
+            <TopQueriesList />
+          </div>
         </div>
       </motion.div>
     </DashboardLayout>

@@ -1,34 +1,45 @@
 
-import { ResponsiveContainer, BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip, Legend } from 'recharts';
-import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { useHistory } from "@/contexts/HistoryContext";
+import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
+import { ChartContainer, ChartTooltip, ChartTooltipContent } from "@/components/ui/chart";
+import { BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip, Legend, ResponsiveContainer } from "recharts";
 
 export const QueryChart = () => {
   const { getMonthlyQueryCount } = useHistory();
   const data = getMonthlyQueryCount();
   
+  const chartConfig = {
+    queries: {
+      label: "Queries",
+      theme: {
+        light: "hsl(var(--primary))",
+        dark: "hsl(var(--primary))"
+      }
+    }
+  };
+  
   return (
-    <Card className="col-span-2">
+    <Card>
       <CardHeader>
         <CardTitle>Monthly Queries</CardTitle>
       </CardHeader>
       <CardContent className="h-[300px]">
-        <ResponsiveContainer width="100%" height="100%">
-          <BarChart data={data} margin={{ top: 5, right: 30, left: 20, bottom: 5 }}>
-            <CartesianGrid strokeDasharray="3 3" />
-            <XAxis dataKey="month" />
-            <YAxis allowDecimals={false} />
-            <Tooltip 
-              contentStyle={{ 
-                backgroundColor: 'hsl(var(--card))', 
-                borderColor: 'hsl(var(--border))' 
-              }}
-              labelStyle={{ color: 'hsl(var(--card-foreground))' }}
-            />
-            <Legend />
-            <Bar dataKey="count" name="Queries" fill="hsl(var(--primary))" radius={[4, 4, 0, 0]} />
-          </BarChart>
-        </ResponsiveContainer>
+        {data.some(month => month.count > 0) ? (
+          <ChartContainer config={chartConfig}>
+            <BarChart data={data} margin={{ top: 10, right: 30, left: 0, bottom: 5 }}>
+              <CartesianGrid strokeDasharray="3 3" />
+              <XAxis dataKey="month" />
+              <YAxis allowDecimals={false} />
+              <Tooltip content={<ChartTooltipContent />} />
+              <Legend />
+              <Bar dataKey="count" name="Queries" fill="var(--color-queries)" radius={[4, 4, 0, 0]} />
+            </BarChart>
+          </ChartContainer>
+        ) : (
+          <div className="h-full flex items-center justify-center text-muted-foreground">
+            No query data to display yet
+          </div>
+        )}
       </CardContent>
     </Card>
   );
