@@ -1,4 +1,3 @@
-
 import { useEffect, useState } from "react";
 import { motion } from "framer-motion";
 import DashboardLayout from "@/components/layouts/DashboardLayout";
@@ -13,41 +12,81 @@ import { Slider } from "@/components/ui/slider";
 import { Textarea } from "@/components/ui/textarea";
 import { useToast } from "@/hooks/use-toast";
 import { useAssistant } from "@/contexts/AssistantContext";
+import { loadGlobalSettings, saveGlobalSettings, AssistantSettings } from "@/utils/globalSettings";
 
 const Admin = () => {
-  const { apiKey, setApiKey } = useAssistant();
+  const { setApiKey } = useAssistant();
   const { toast } = useToast();
-  const [newApiKey, setNewApiKey] = useState(apiKey || "");
+  
+  // Individual fields for settings
+  const [assistantName, setAssistantName] = useState("Personal Assistant");
+  const [maxContext, setMaxContext] = useState(10);
+  const [analyticsCollection, setAnalyticsCollection] = useState(true);
+  const [newApiKey, setNewApiKey] = useState("");
+  const [model, setModel] = useState("gemini-1.5-pro");
+  const [temperature, setTemperature] = useState(0.7);
   const [voiceEnabled, setVoiceEnabled] = useState(true);
   const [selectedVoice, setSelectedVoice] = useState("en-US-Standard-B");
-  const [temperature, setTemperature] = useState(0.7);
+  const [speechSpeed, setSpeechSpeed] = useState(1);
   const [systemPrompt, setSystemPrompt] = useState(
     "You are a helpful AI assistant that provides accurate, concise, and helpful information."
   );
   const [isLoading, setIsLoading] = useState(false);
 
+  // Load settings from DB when component mounts
   useEffect(() => {
     document.title = "Admin Panel - Personal Assistant";
+    setIsLoading(true);
+    loadGlobalSettings().then((settings) => {
+      if (settings) {
+        setAssistantName(settings.assistantName ?? "Personal Assistant");
+        setMaxContext(settings.maxContext ?? 10);
+        setAnalyticsCollection(settings.analyticsCollection ?? true);
+        setNewApiKey(settings.apiKey ?? "");
+        setModel(settings.model ?? "gemini-1.5-pro");
+        setTemperature(settings.temperature ?? 0.7);
+        setVoiceEnabled(settings.voiceEnabled ?? true);
+        setSelectedVoice(settings.selectedVoice ?? "en-US-Standard-B");
+        setSpeechSpeed(settings.speechSpeed ?? 1);
+        setSystemPrompt(settings.systemPrompt ?? "You are a helpful AI assistant that provides accurate, concise, and helpful information.");
+        setApiKey(settings.apiKey ?? "");
+      }
+      setIsLoading(false);
+    });
+    // Do not include setApiKey in deps array, it is stable from context
+    // eslint-disable-next-line
   }, []);
 
-  const handleSaveApiKey = () => {
-    setApiKey(newApiKey.trim());
-    toast({
-      title: "API Key Updated",
-      description: "Your Gemini API key has been updated successfully.",
-    });
-  };
-
-  const handleSaveSettings = () => {
+  // Save ALL settings to DB utility
+  const handleSaveAllSettings = async () => {
     setIsLoading(true);
-    // Simulate saving settings
-    setTimeout(() => {
-      setIsLoading(false);
+    const settings: AssistantSettings = {
+      assistantName,
+      maxContext,
+      analyticsCollection,
+      apiKey: newApiKey,
+      model,
+      temperature,
+      voiceEnabled,
+      selectedVoice,
+      speechSpeed,
+      systemPrompt,
+    };
+    const result = await saveGlobalSettings(settings);
+    setIsLoading(false);
+    if (result) {
+      setApiKey(newApiKey.trim());
       toast({
         title: "Settings Saved",
-        description: "Your assistant settings have been updated successfully.",
+        description: "Global assistant settings saved and applied for all users.",
       });
-    }, 1000);
+    } else {
+      toast({
+        title: "Error",
+        description: "Error saving global settings.",
+        variant: "destructive",
+      });
+    }
   };
 
   return (
@@ -74,12 +113,11 @@ const Admin = () => {
               <CardContent className="space-y-6">
                 <div className="space-y-2">
                   <Label htmlFor="assistant-name">Assistant Name</Label>
-                  <Input id="assistant-name" defaultValue="Personal Assistant" />
+                  <Input id="assistant-name" value={assistantName} onChange={e => setAssistantName(e.target.value)} />
                 </div>
-                
                 <div className="space-y-2">
                   <Label htmlFor="max-context">Maximum Context Length</Label>
-                  <Select defaultValue="10">
+                  <Select value={String(maxContext)} onValueChange={v => setMaxContext(Number(v))}>
                     <SelectTrigger id="max-context">
                       <SelectValue placeholder="Select maximum context" />
                     </SelectTrigger>
@@ -94,7 +132,6 @@ const Admin = () => {
                     Number of previous messages to include for context
                   </p>
                 </div>
-                
                 <div className="flex items-center justify-between">
                   <div>
                     <Label htmlFor="analytics-switch">Analytics Collection</Label>
@@ -102,10 +139,9 @@ const Admin = () => {
                       Collect data on queries for analytics dashboard
                     </p>
                   </div>
-                  <Switch id="analytics-switch" defaultChecked />
+                  <Switch id="analytics-switch" checked={analyticsCollection} onCheckedChange={setAnalyticsCollection} />
                 </div>
-                
-                <Button onClick={handleSaveSettings} disabled={isLoading}>
+                <Button onClick={handleSaveAllSettings} disabled={isLoading}>
                   {isLoading ? "Saving..." : "Save Settings"}
                 </Button>
               </CardContent>
@@ -128,13 +164,12 @@ const Admin = () => {
                     placeholder="Enter your Gemini API key"
                   />
                   <p className="text-xs text-muted-foreground">
-                    Required for the assistant to function. The key is stored locally.
+                    Required for the assistant to function. The key is stored globally.
                   </p>
                 </div>
-                
                 <div className="space-y-2">
                   <Label htmlFor="model-select">AI Model</Label>
-                  <Select defaultValue="gemini-1.5-pro">
+                  <Select value={model} onValueChange={setModel}>
                     <SelectTrigger id="model-select">
                       <SelectValue placeholder="Select model" />
                     </SelectTrigger>
@@ -144,7 +179,6 @@ const Admin = () => {
                     </SelectContent>
                   </Select>
                 </div>
-                
                 <div className="space-y-3">
                   <div className="flex justify-between">
                     <Label htmlFor="temp-slider">Temperature: {temperature.toFixed(1)}</Label>
@@ -154,7 +188,6 @@ const Admin = () => {
                     min={0}
                     max={1}
                     step={0.1}
-                    defaultValue={[0.7]}
                     value={[temperature]}
                     onValueChange={(value) => setTemperature(value[0])}
                   />
@@ -162,8 +195,7 @@ const Admin = () => {
                     Lower values produce more predictable responses, higher values more creative ones
                   </p>
                 </div>
-                
-                <Button onClick={handleSaveApiKey}>Save API Settings</Button>
+                <Button onClick={handleSaveAllSettings} disabled={isLoading}>Save API Settings</Button>
               </CardContent>
             </Card>
           </TabsContent>
@@ -187,7 +219,6 @@ const Admin = () => {
                     onCheckedChange={setVoiceEnabled}
                   />
                 </div>
-                
                 <div className="space-y-2">
                   <Label htmlFor="voice-select">Voice</Label>
                   <Select 
@@ -206,7 +237,6 @@ const Admin = () => {
                     </SelectContent>
                   </Select>
                 </div>
-                
                 <div className="space-y-3">
                   <div className="flex justify-between">
                     <Label htmlFor="speed-slider">Speech Speed</Label>
@@ -216,12 +246,12 @@ const Admin = () => {
                     min={0.5}
                     max={2}
                     step={0.1}
-                    defaultValue={[1]}
+                    value={[speechSpeed]}
+                    onValueChange={v => setSpeechSpeed(v[0])}
                     disabled={!voiceEnabled}
                   />
                 </div>
-                
-                <Button onClick={handleSaveSettings} disabled={isLoading || !voiceEnabled}>
+                <Button onClick={handleSaveAllSettings} disabled={isLoading || !voiceEnabled}>
                   {isLoading ? "Saving..." : "Save Voice Settings"}
                 </Button>
               </CardContent>
@@ -247,8 +277,7 @@ const Admin = () => {
                     These instructions guide how the assistant behaves and responds
                   </p>
                 </div>
-                
-                <Button onClick={handleSaveSettings} disabled={isLoading}>
+                <Button onClick={handleSaveAllSettings} disabled={isLoading}>
                   {isLoading ? "Saving..." : "Save Prompt"}
                 </Button>
               </CardContent>
