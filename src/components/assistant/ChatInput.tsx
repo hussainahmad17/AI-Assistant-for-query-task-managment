@@ -3,7 +3,7 @@ import { useState, FormEvent, useRef, useEffect } from "react";
 import { motion, AnimatePresence } from "framer-motion";
 import { Button } from "@/components/ui/button";
 import { Textarea } from "@/components/ui/textarea";
-import { Mic, MicOff, Send, Loader2, AlertCircle } from "lucide-react";
+import { Mic, MicOff, Send, Loader2 } from "lucide-react";
 import { useAssistant } from "@/contexts/AssistantContext";
 import { useHistory } from "@/contexts/HistoryContext";
 import { useToast } from "@/hooks/use-toast";
@@ -36,7 +36,6 @@ export const ChatInput = () => {
     
     const message = input.trim();
     setInput("");
-    addToHistory(message);
     
     // Send the message to the assistant context
     await sendMessage(message);
@@ -84,7 +83,7 @@ export const ChatInput = () => {
           value={input}
           onChange={handleTextareaChange}
           className={`min-h-[60px] border-0 resize-none focus-visible:ring-0 focus-visible:ring-offset-0 transition-all duration-200 ${isListening ? 'bg-muted' : ''}`}
-          disabled={isListening}
+          disabled={isListening || isProcessing}
           onKeyDown={(e) => {
             if (e.key === 'Enter' && !e.shiftKey) {
               e.preventDefault();

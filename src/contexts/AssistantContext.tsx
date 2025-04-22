@@ -3,6 +3,8 @@ import React, { createContext, useContext, useState, useEffect, ReactNode } from
 import { useToast } from '@/hooks/use-toast';
 import { loadGlobalSettings } from '@/utils/globalSettings';
 import { useHistory } from '@/contexts/HistoryContext';
+import { supabase } from '@/integrations/supabase/client';
+import { useAuth } from './AuthContext';
 
 interface AssistantContextType {
   messages: Message[];
@@ -62,12 +64,41 @@ export function AssistantProvider({ children }: { children: ReactNode }) {
   const [isSpeaking, setIsSpeaking] = useState(false);
   const [isListening, setIsListening] = useState(false);
   const [settings, setSettings] = useState<AssistantSettings | null>(null);
+  const [retryCount, setRetryCount] = useState(0);
   const { toast } = useToast();
   const { addToHistory } = useHistory();
+  const { user } = useAuth();
   
   // Speech synthesis
   const speechSynthesis = window.speechSynthesis;
   const [recognition, setRecognition] = useState<SpeechRecognition | null>(null);
+
+  // Load conversation history from localStorage on mount
+  useEffect(() => {
+    const loadConversationHistory = () => {
+      const savedMessages = localStorage.getItem('conversation_history');
+      if (savedMessages) {
+        try {
+          const parsedMessages = JSON.parse(savedMessages);
+          // Convert string timestamps back to Date objects
+          const formattedMessages = parsedMessages.map((msg: any) => ({
+            ...msg,
+            timestamp: new Date(msg.timestamp)
+          }));
+          setMessages(formattedMessages);
+        } catch (error) {
+          console.error('Failed to parse conversation history from localStorage', error);
+        }
+      }
+    };
+    
+    loadConversationHistory();
+  }, []);
+  
+  // Save conversation history to localStorage whenever it changes
+  useEffect(() => {
+    localStorage.setItem('conversation_history', JSON.stringify(messages));
+  }, [messages]);
 
   // Load global settings from database
   useEffect(() => {
@@ -133,7 +164,7 @@ export function AssistantProvider({ children }: { children: ReactNode }) {
           setIsListening(false);
           toast({
             title: 'Voice Input Error',
-            description: `Error: ${event.error}`,
+            description: `Error: ${event.error}. Please try again later.`,
             variant: 'destructive',
           });
         };
@@ -158,12 +189,25 @@ export function AssistantProvider({ children }: { children: ReactNode }) {
     }
   }, [apiKey]);
 
+  // Clean text for speech synthesis (remove markdown symbols)
+  const cleanTextForSpeech = (text: string) => {
+    return text
+      .replace(/\*\*(.*?)\*\*/g, '$1') // Remove bold markers
+      .replace(/\*(.*?)\*/g, '$1')     // Remove italic markers
+      .replace(/`(.*?)`/g, '$1')       // Remove code markers
+      .replace(/#{1,6}\s+/g, '')       // Remove headings
+      .replace(/\[(.*?)\]\((.*?)\)/g, '$1') // Convert links to just the text
+      .replace(/\n\n/g, '. ')          // Replace double newlines with periods
+      .replace(/\n/g, ' ');            // Replace single newlines with spaces
+  };
+
   const speakMessage = (text: string) => {
     if (!settings?.voiceEnabled || !speechSynthesis) return;
     
     stopSpeaking(); // Stop any ongoing speech
     
-    const utterance = new SpeechSynthesisUtterance(text);
+    const cleanedText = cleanTextForSpeech(text);
+    const utterance = new SpeechSynthesisUtterance(cleanedText);
     
     // Apply voice settings if available
     if (settings) {
@@ -196,6 +240,25 @@ export function AssistantProvider({ children }: { children: ReactNode }) {
     // If it's an assistant message and voice is enabled, speak it out
     if (role === 'assistant' && settings?.voiceEnabled && speechSynthesis) {
       speakMessage(content);
+    }
+    
+    // Save conversation to Supabase if user is logged in
+    if (user) {
+      try {
+        supabase
+          .from('conversation_history')
+          .insert([{
+            user_id: user.id,
+            content: content,
+            role: role,
+            created_at: new Date().toISOString()
+          }])
+          .then(({ error }) => {
+            if (error) console.error('Error saving message to Supabase:', error);
+          });
+      } catch (error) {
+        console.error('Failed to save conversation to Supabase', error);
+      }
     }
   };
 
@@ -252,6 +315,11 @@ export function AssistantProvider({ children }: { children: ReactNode }) {
 
     try {
       setIsProcessing(true);
+      
+      // Add user message to conversation first
+      if (messages.length === 0 || messages[messages.length - 1].role !== 'user') {
+        addMessage(content, 'user');
+      }
       
       // Track this query in history if analytics collection is enabled
       if (settings?.analyticsCollection !== false) {
@@ -319,9 +387,28 @@ export function AssistantProvider({ children }: { children: ReactNode }) {
 
       if (!response.ok) {
         const errorData = await response.json();
-        throw new Error(`API Error: ${errorData.error?.message || 'Unknown error'}`);
+        const errorMessage = errorData.error?.message || 'Unknown error';
+        
+        // Handle overloaded model error with retry
+        if (errorMessage.includes('overloaded') && retryCount < 3) {
+          setRetryCount(prev => prev + 1);
+          
+          toast({
+            title: 'Model Overloaded',
+            description: `Retrying in 2 seconds... (Attempt ${retryCount + 1}/3)`,
+            variant: 'default',
+          });
+          
+          // Wait 2 seconds and retry
+          setTimeout(() => sendMessage(content), 2000);
+          return;
+        }
+        
+        throw new Error(`API Error: ${errorMessage}`);
       }
 
+      // Reset retry count on success
+      setRetryCount(0);
       const data = await response.json();
       
       if (data.candidates && data.candidates.length > 0 && 
@@ -347,6 +434,24 @@ export function AssistantProvider({ children }: { children: ReactNode }) {
   const clearConversation = () => {
     setMessages([]);
     stopSpeaking();
+    
+    // Remove from localStorage
+    localStorage.removeItem('conversation_history');
+    
+    // Clear from Supabase if user is logged in
+    if (user) {
+      try {
+        supabase
+          .from('conversation_history')
+          .delete()
+          .eq('user_id', user.id)
+          .then(({ error }) => {
+            if (error) console.error('Error clearing conversation from Supabase:', error);
+          });
+      } catch (error) {
+        console.error('Failed to clear conversation from Supabase', error);
+      }
+    }
   };
 
   const value = {
