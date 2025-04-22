@@ -9,11 +9,13 @@ import Auth from "@/pages/Auth";
 import Login from "@/pages/Login";
 import Register from "@/pages/Register";
 import { AuthProvider } from "./contexts/AuthContext";
+import { AssistantProvider } from "./contexts/AssistantContext";
 import ChatHistory from "@/pages/ChatHistory";
 import NotFound from "@/pages/NotFound";
 import AuthLayout from "@/components/layouts/AuthLayout";
 
-const router = createBrowserRouter([
+// Create routes configuration
+const routes = [
   {
     path: "/",
     element: <Index />,
@@ -56,12 +58,16 @@ const router = createBrowserRouter([
     path: "*",
     element: <NotFound />,
   },
-]);
+];
+
+const router = createBrowserRouter(routes);
 
 function App() {
   return (
     <AuthProvider>
-      <RouterProvider router={router} />
+      <AssistantProvider>
+        <RouterProvider router={router} />
+      </AssistantProvider>
     </AuthProvider>
   );
 }
