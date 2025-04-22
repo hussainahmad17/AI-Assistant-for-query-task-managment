@@ -18,7 +18,6 @@ const Admin = () => {
   const { setApiKey } = useAssistant();
   const { toast } = useToast();
   
-  // Individual fields for settings
   const [assistantName, setAssistantName] = useState("Personal Assistant");
   const [maxContext, setMaxContext] = useState(10);
   const [analyticsCollection, setAnalyticsCollection] = useState(true);
@@ -33,7 +32,6 @@ const Admin = () => {
   );
   const [isLoading, setIsLoading] = useState(false);
 
-  // Load settings from DB when component mounts
   useEffect(() => {
     document.title = "Admin Panel - Personal Assistant";
     setIsLoading(true);
@@ -53,11 +51,8 @@ const Admin = () => {
       }
       setIsLoading(false);
     });
-    // Do not include setApiKey in deps array, it is stable from context
-    // eslint-disable-next-line
   }, []);
 
-  // Save ALL settings to DB utility
   const handleSaveAllSettings = async () => {
     setIsLoading(true);
     const settings: AssistantSettings = {
@@ -76,6 +71,7 @@ const Admin = () => {
     setIsLoading(false);
     if (result) {
       setApiKey(newApiKey.trim());
+      window.dispatchEvent(new CustomEvent('settingsUpdate'));
       toast({
         title: "Settings Saved",
         description: "Global assistant settings saved and applied for all users.",

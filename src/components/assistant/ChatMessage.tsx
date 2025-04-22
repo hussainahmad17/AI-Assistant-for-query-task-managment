@@ -1,4 +1,5 @@
 
+import { ReactNode } from "react";
 import { motion } from "framer-motion";
 import { Volume2, VolumeX } from "lucide-react";
 import { Button } from "@/components/ui/button";
@@ -14,10 +15,14 @@ interface ChatMessageProps {
   isLastMessage?: boolean;
 }
 
-export const ChatMessage = ({ content, role, timestamp, isLastMessage }: ChatMessageProps) => {
+export const ChatMessage = ({ 
+  content, 
+  role, 
+  timestamp, 
+  isLastMessage 
+}: ChatMessageProps) => {
   const { isSpeaking, stopSpeaking, speakMessage } = useAssistant();
   
-  // Format the timestamp
   const formattedTime = new Intl.DateTimeFormat('en-US', {
     hour: 'numeric',
     minute: 'numeric',
@@ -41,13 +46,13 @@ export const ChatMessage = ({ content, role, timestamp, isLastMessage }: ChatMes
       <div className={`flex flex-col max-w-[80%] space-y-2 ${isAssistant ? '' : 'items-end'}`}>
         <div className={`rounded-lg p-3 ${
           isAssistant 
-            ? 'bg-card border text-card-foreground shadow-sm prose prose-sm max-w-none dark:prose-invert' 
+            ? 'bg-card border text-card-foreground shadow-sm' 
             : 'bg-primary text-primary-foreground'
         }`}>
           {isAssistant ? (
-            <ReactMarkdown className="whitespace-pre-wrap break-words">
-              {content}
-            </ReactMarkdown>
+            <div className="prose prose-sm max-w-none dark:prose-invert break-words">
+              <ReactMarkdown>{content}</ReactMarkdown>
+            </div>
           ) : (
             <p className="whitespace-pre-wrap">{content}</p>
           )}

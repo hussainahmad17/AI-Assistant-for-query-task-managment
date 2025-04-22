@@ -82,7 +82,6 @@ export function AssistantProvider({ children }: { children: ReactNode }) {
             localStorage.setItem('gemini_api_key', dbSettings.apiKey);
           }
         } else {
-          // Use defaults if no settings found
           setSettings(defaultSettings);
         }
       } catch (error) {
@@ -92,6 +91,23 @@ export function AssistantProvider({ children }: { children: ReactNode }) {
     };
     
     loadSettings();
+    
+    // Listen for settings updates
+    const handleSettingsUpdate = async () => {
+      const newSettings = await loadGlobalSettings();
+      if (newSettings) {
+        setSettings(newSettings);
+        if (newSettings.apiKey) {
+          setApiKey(newSettings.apiKey);
+          localStorage.setItem('gemini_api_key', newSettings.apiKey);
+        }
+      }
+    };
+    
+    window.addEventListener('settingsUpdate', handleSettingsUpdate);
+    return () => {
+      window.removeEventListener('settingsUpdate', handleSettingsUpdate);
+    };
   }, []);
 
   // Initialize speech recognition if available
