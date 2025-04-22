@@ -65,6 +65,7 @@ export function AssistantProvider({ children }: { children: ReactNode }) {
   const [isListening, setIsListening] = useState(false);
   const [settings, setSettings] = useState<AssistantSettings | null>(null);
   const [retryCount, setRetryCount] = useState(0);
+  const [isProcessingVoice, setIsProcessingVoice] = useState(false); // New state to prevent double queries
   const { toast } = useToast();
   const { addToHistory } = useHistory();
   const { user } = useAuth();
@@ -102,7 +103,7 @@ export function AssistantProvider({ children }: { children: ReactNode }) {
             .from('conversation_history') as any)
             .select('*')
             .eq('user_id', user.id)
-            .order('created_at', { ascending: true });
+            .order('created_at', { ascending: true }); // Order by created_at in ascending order
             
           if (error) throw error;
           
@@ -188,14 +189,22 @@ export function AssistantProvider({ children }: { children: ReactNode }) {
         
         recognitionInstance.onresult = (event) => {
           const transcript = event.results[0][0].transcript;
-          addMessage(transcript, 'user');
-          sendMessage(transcript);
+          
+          // Prevent duplicate processing
+          if (!isProcessingVoice) {
+            setIsProcessingVoice(true);
+            addMessage(transcript, 'user');
+            sendMessage(transcript).finally(() => {
+              setIsProcessingVoice(false);
+            });
+          }
           setIsListening(false);
         };
         
         recognitionInstance.onerror = (event) => {
           console.error('Speech recognition error', event.error);
           setIsListening(false);
+          setIsProcessingVoice(false);
           toast({
             title: 'Voice Input Error',
             description: `Error: ${event.error}. Please try again later.`,
@@ -312,7 +321,7 @@ export function AssistantProvider({ children }: { children: ReactNode }) {
       return;
     }
 
-    if (isListening) {
+    if (isListening || isProcessingVoice) {
       recognition.stop();
       setIsListening(false);
     } else {

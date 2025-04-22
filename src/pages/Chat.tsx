@@ -7,8 +7,9 @@ import { ChatInput } from "@/components/assistant/ChatInput";
 import { ApiKeyForm } from "@/components/assistant/ApiKeyForm";
 import { useAssistant } from "@/contexts/AssistantContext";
 import { Card } from "@/components/ui/card";
-import { BrainCircuit } from "lucide-react";
+import { BrainCircuit, History } from "lucide-react";
 import { Link } from "react-router-dom";
+import { Button } from "@/components/ui/button";
 
 const Chat = () => {
   const { apiKey, settings } = useAssistant();
@@ -30,11 +31,20 @@ const Chat = () => {
             <h1 className="text-3xl font-bold">{settings?.assistantName || 'Personal Assistant'}</h1>
           </div>
           
-          {apiKey && (
-            <Link to="/admin" className="text-sm text-muted-foreground hover:text-foreground">
-              Settings
+          <div className="flex items-center gap-2">
+            <Link to="/chat-history">
+              <Button variant="outline" size="sm" className="flex items-center gap-2">
+                <History className="h-4 w-4" />
+                Chat History
+              </Button>
             </Link>
-          )}
+            
+            {apiKey && (
+              <Link to="/admin" className="text-sm text-muted-foreground hover:text-foreground">
+                Settings
+              </Link>
+            )}
+          </div>
         </div>
         
         {!apiKey && (
