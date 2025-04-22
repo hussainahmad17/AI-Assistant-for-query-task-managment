@@ -2,7 +2,7 @@
 import React, { useState } from "react";
 import { Link, useLocation } from "react-router-dom";
 import { motion } from "framer-motion";
-import { Menu, X, BarChart, Settings, MessageSquare, LogOut } from "lucide-react";
+import { Menu, X, BarChart, Settings, MessageSquare, LogOut, History } from "lucide-react";
 import { Button } from "@/components/ui/button";
 
 interface DashboardLayoutProps {
@@ -17,6 +17,7 @@ const DashboardLayout: React.FC<DashboardLayoutProps> = ({ children }) => {
 
   const navItems = [
     { path: "/chat", icon: <MessageSquare size={20} />, label: "Assistant" },
+    { path: "/chat-history", icon: <History size={20} />, label: "Chat History" },
     { path: "/dashboard", icon: <BarChart size={20} />, label: "Analytics" },
     { path: "/admin", icon: <Settings size={20} />, label: "Admin" },
   ];

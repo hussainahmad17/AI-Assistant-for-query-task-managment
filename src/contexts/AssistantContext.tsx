@@ -65,7 +65,7 @@ export function AssistantProvider({ children }: { children: ReactNode }) {
   const [isListening, setIsListening] = useState(false);
   const [settings, setSettings] = useState<AssistantSettings | null>(null);
   const [retryCount, setRetryCount] = useState(0);
-  const [isProcessingVoice, setIsProcessingVoice] = useState(false); // New state to prevent double queries
+  const [isProcessingVoice, setIsProcessingVoice] = useState(false);
   const { toast } = useToast();
   const { addToHistory } = useHistory();
   const { user } = useAuth();
@@ -77,25 +77,10 @@ export function AssistantProvider({ children }: { children: ReactNode }) {
   // Load conversation history from localStorage on mount
   useEffect(() => {
     const loadConversationHistory = async () => {
-      // First check localStorage for immediate display
-      const savedMessages = localStorage.getItem('conversation_history');
-      let initialMessages: Message[] = [];
+      // Clear any existing conversation on page load to ensure fresh state
+      localStorage.removeItem('conversation_history');
       
-      if (savedMessages) {
-        try {
-          const parsedMessages = JSON.parse(savedMessages);
-          // Convert string timestamps back to Date objects
-          initialMessages = parsedMessages.map((msg: any) => ({
-            ...msg,
-            timestamp: new Date(msg.timestamp)
-          }));
-          setMessages(initialMessages);
-        } catch (error) {
-          console.error('Failed to parse conversation history from localStorage', error);
-        }
-      }
-      
-      // Then load from Supabase if user is logged in
+      // If user is logged in, load conversation history from Supabase
       if (user) {
         try {
           // Use type assertion to bypass TypeScript's type checking
@@ -115,11 +100,7 @@ export function AssistantProvider({ children }: { children: ReactNode }) {
               timestamp: new Date(item.created_at)
             }));
             
-            // Set messages from Supabase, overriding localStorage
             setMessages(supabaseMessages);
-            
-            // Update localStorage with Supabase data
-            localStorage.setItem('conversation_history', JSON.stringify(supabaseMessages));
           }
         } catch (error) {
           console.error('Failed to fetch conversation history from Supabase', error);
@@ -130,20 +111,22 @@ export function AssistantProvider({ children }: { children: ReactNode }) {
     loadConversationHistory();
   }, [user]);
   
-  // Save conversation history to localStorage whenever it changes
-  useEffect(() => {
-    localStorage.setItem('conversation_history', JSON.stringify(messages));
-  }, [messages]);
-
   // Load global settings from database
   useEffect(() => {
     const loadSettings = async () => {
       try {
+        // First try to get API key from localStorage
+        const savedApiKey = localStorage.getItem('gemini_api_key');
+        if (savedApiKey) {
+          setApiKey(savedApiKey);
+        }
+        
+        // Then try to get settings from database
         const dbSettings = await loadGlobalSettings();
         if (dbSettings) {
           setSettings(dbSettings);
-          // Apply critical settings immediately
-          if (dbSettings.apiKey) {
+          // Only override apiKey from localStorage if the database has one and it's different
+          if (dbSettings.apiKey && (!savedApiKey || dbSettings.apiKey !== savedApiKey)) {
             setApiKey(dbSettings.apiKey);
             localStorage.setItem('gemini_api_key', dbSettings.apiKey);
           }
@@ -188,17 +171,22 @@ export function AssistantProvider({ children }: { children: ReactNode }) {
         recognitionInstance.interimResults = false;
         
         recognitionInstance.onresult = (event) => {
-          const transcript = event.results[0][0].transcript;
+          if (isProcessingVoice) return; // Prevent double processing
           
-          // Prevent duplicate processing
-          if (!isProcessingVoice) {
-            setIsProcessingVoice(true);
-            addMessage(transcript, 'user');
-            sendMessage(transcript).finally(() => {
+          const transcript = event.results[0][0].transcript;
+          setIsProcessingVoice(true);
+          
+          // Add the transcript as a user message
+          addMessage(transcript, 'user');
+          
+          // Process the message
+          sendMessage(transcript)
+            .catch(error => {
+              console.error('Error processing voice input:', error);
+            })
+            .finally(() => {
               setIsProcessingVoice(false);
             });
-          }
-          setIsListening(false);
         };
         
         recognitionInstance.onerror = (event) => {

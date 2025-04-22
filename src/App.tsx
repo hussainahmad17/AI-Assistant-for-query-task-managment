@@ -14,6 +14,7 @@ import { HistoryProvider } from "./contexts/HistoryContext";
 import ChatHistory from "@/pages/ChatHistory";
 import NotFound from "@/pages/NotFound";
 import AuthLayout from "@/components/layouts/AuthLayout";
+import Dashboard from "@/pages/Dashboard";
 
 // Create routes configuration
 const routes = [
@@ -32,6 +33,10 @@ const routes = [
   {
     path: "/chat-history",
     element: <ChatHistory />,
+  },
+  {
+    path: "/dashboard",
+    element: <Dashboard />,
   },
   {
     path: "/admin",

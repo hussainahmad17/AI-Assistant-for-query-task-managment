@@ -1,5 +1,5 @@
 
-import { useState } from "react";
+import { useState, useEffect } from "react";
 import { motion } from "framer-motion";
 import { Input } from "@/components/ui/input";
 import { Button } from "@/components/ui/button";
@@ -15,6 +15,14 @@ export const ApiKeyForm = () => {
   const [error, setError] = useState("");
   
   const DEFAULT_API_KEY = "YOUR-GEMINI-API-KEY"; // Add a default API key for testing
+
+  // Load API key from localStorage if available
+  useEffect(() => {
+    const savedApiKey = localStorage.getItem('gemini_api_key');
+    if (savedApiKey) {
+      setApiKey(savedApiKey);
+    }
+  }, [setApiKey]);
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -37,6 +45,7 @@ export const ApiKeyForm = () => {
       }
       
       setApiKey(apiKeyInput.trim());
+      localStorage.setItem('gemini_api_key', apiKeyInput.trim());
     } catch (err: any) {
       setError(err.message || "Failed to validate API key");
     } finally {
