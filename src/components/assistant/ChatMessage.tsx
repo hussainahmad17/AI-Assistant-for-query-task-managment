@@ -5,6 +5,7 @@ import { Button } from "@/components/ui/button";
 import { Avatar } from "@/components/ui/avatar";
 import { useAssistant } from "@/contexts/AssistantContext";
 import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from "@/components/ui/tooltip";
+import ReactMarkdown from 'react-markdown';
 
 interface ChatMessageProps {
   content: string;
@@ -14,7 +15,7 @@ interface ChatMessageProps {
 }
 
 export const ChatMessage = ({ content, role, timestamp, isLastMessage }: ChatMessageProps) => {
-  const { isSpeaking, stopSpeaking } = useAssistant();
+  const { isSpeaking, stopSpeaking, speakMessage } = useAssistant();
   
   // Format the timestamp
   const formattedTime = new Intl.DateTimeFormat('en-US', {
@@ -40,10 +41,16 @@ export const ChatMessage = ({ content, role, timestamp, isLastMessage }: ChatMes
       <div className={`flex flex-col max-w-[80%] space-y-2 ${isAssistant ? '' : 'items-end'}`}>
         <div className={`rounded-lg p-3 ${
           isAssistant 
-            ? 'bg-card border text-card-foreground shadow-sm' 
+            ? 'bg-card border text-card-foreground shadow-sm prose prose-sm max-w-none dark:prose-invert' 
             : 'bg-primary text-primary-foreground'
         }`}>
-          <p className="whitespace-pre-wrap">{content}</p>
+          {isAssistant ? (
+            <ReactMarkdown className="whitespace-pre-wrap break-words">
+              {content}
+            </ReactMarkdown>
+          ) : (
+            <p className="whitespace-pre-wrap">{content}</p>
+          )}
           
           {isAssistant && isLastMessage && (
             <div className="flex justify-end mt-2">
@@ -54,7 +61,7 @@ export const ChatMessage = ({ content, role, timestamp, isLastMessage }: ChatMes
                       variant="ghost"
                       size="sm"
                       className="h-6 px-2 text-muted-foreground hover:text-foreground"
-                      onClick={stopSpeaking}
+                      onClick={() => isSpeaking ? stopSpeaking() : speakMessage(content)}
                     >
                       {isSpeaking ? <VolumeX size={14} /> : <Volume2 size={14} />}
                     </Button>

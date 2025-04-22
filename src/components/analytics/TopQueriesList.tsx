@@ -1,11 +1,32 @@
 
+import { useEffect, useState } from "react";
 import { useHistory } from "@/contexts/HistoryContext";
 import { motion } from "framer-motion";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Table, TableHeader, TableRow, TableHead, TableBody, TableCell } from "@/components/ui/table";
 
 export const TopQueriesList = () => {
-  const { topQueries } = useHistory();
+  const { topQueries: getTopQueries } = useHistory();
+  const [topQueries, setTopQueries] = useState(getTopQueries);
+  
+  // Update data when analytics events occur
+  useEffect(() => {
+    const updateListData = () => {
+      setTopQueries(getTopQueries);
+    };
+    
+    // Initial data load
+    updateListData();
+    
+    // Listen for analytics update events
+    window.addEventListener('analyticsUpdate', updateListData);
+    window.addEventListener('analyticsClear', updateListData);
+    
+    return () => {
+      window.removeEventListener('analyticsUpdate', updateListData);
+      window.removeEventListener('analyticsClear', updateListData);
+    };
+  }, [getTopQueries]);
   
   return (
     <Card>

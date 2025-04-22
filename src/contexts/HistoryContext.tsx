@@ -60,13 +60,23 @@ export function HistoryProvider({ children }: { children: ReactNode }) {
       query,
       timestamp: new Date(),
     };
+    
+    // Update local state for immediate UI update
     setHistory((prev) => [newItem, ...prev]);
+    
+    // Create a custom event to notify the dashboard components to update
+    const analyticsUpdateEvent = new CustomEvent('analyticsUpdate', { detail: newItem });
+    window.dispatchEvent(analyticsUpdateEvent);
   };
 
   // Clear all history
   const clearHistory = () => {
     setHistory([]);
     localStorage.removeItem('assistant_history');
+    
+    // Create a clear event to reset dashboard components
+    const analyticsClearEvent = new CustomEvent('analyticsClear');
+    window.dispatchEvent(analyticsClearEvent);
   };
 
   // Get the top most frequent queries

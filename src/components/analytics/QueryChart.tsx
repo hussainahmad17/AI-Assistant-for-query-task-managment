@@ -1,4 +1,5 @@
 
+import { useEffect, useState } from "react";
 import { useHistory } from "@/contexts/HistoryContext";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { ChartContainer, ChartTooltip, ChartTooltipContent } from "@/components/ui/chart";
@@ -6,7 +7,26 @@ import { BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip, Legend, Responsive
 
 export const QueryChart = () => {
   const { getMonthlyQueryCount } = useHistory();
-  const data = getMonthlyQueryCount();
+  const [data, setData] = useState(getMonthlyQueryCount());
+  
+  // Update data when analytics events occur
+  useEffect(() => {
+    const updateChartData = () => {
+      setData(getMonthlyQueryCount());
+    };
+    
+    // Initial data load
+    updateChartData();
+    
+    // Listen for analytics update events
+    window.addEventListener('analyticsUpdate', updateChartData);
+    window.addEventListener('analyticsClear', updateChartData);
+    
+    return () => {
+      window.removeEventListener('analyticsUpdate', updateChartData);
+      window.removeEventListener('analyticsClear', updateChartData);
+    };
+  }, [getMonthlyQueryCount]);
   
   const chartConfig = {
     queries: {

@@ -1,6 +1,8 @@
 
 import React, { createContext, useContext, useState, useEffect, ReactNode } from 'react';
 import { useToast } from '@/hooks/use-toast';
+import { loadGlobalSettings } from '@/utils/globalSettings';
+import { useHistory } from '@/contexts/HistoryContext';
 
 interface AssistantContextType {
   messages: Message[];
@@ -14,6 +16,8 @@ interface AssistantContextType {
   isListening: boolean;
   toggleListening: () => void;
   stopSpeaking: () => void;
+  speakMessage: (text: string) => void;
+  settings: AssistantSettings | null;
 }
 
 interface Message {
@@ -23,6 +27,32 @@ interface Message {
   timestamp: Date;
 }
 
+interface AssistantSettings {
+  assistantName: string;
+  maxContext: number;
+  analyticsCollection: boolean;
+  apiKey: string;
+  model: string;
+  temperature: number;
+  voiceEnabled: boolean;
+  selectedVoice: string;
+  speechSpeed: number;
+  systemPrompt: string;
+}
+
+const defaultSettings: AssistantSettings = {
+  assistantName: "Personal Assistant",
+  maxContext: 10,
+  analyticsCollection: true,
+  apiKey: "",
+  model: "gemini-1.5-pro",
+  temperature: 0.7,
+  voiceEnabled: true,
+  selectedVoice: "en-US-Standard-B",
+  speechSpeed: 1,
+  systemPrompt: "You are a helpful AI assistant that provides accurate, concise, and helpful information."
+};
+
 const AssistantContext = createContext<AssistantContextType | undefined>(undefined);
 
 export function AssistantProvider({ children }: { children: ReactNode }) {
@@ -31,11 +61,38 @@ export function AssistantProvider({ children }: { children: ReactNode }) {
   const [apiKey, setApiKey] = useState<string | null>(localStorage.getItem('gemini_api_key'));
   const [isSpeaking, setIsSpeaking] = useState(false);
   const [isListening, setIsListening] = useState(false);
+  const [settings, setSettings] = useState<AssistantSettings | null>(null);
   const { toast } = useToast();
+  const { addToHistory } = useHistory();
   
   // Speech synthesis
   const speechSynthesis = window.speechSynthesis;
   const [recognition, setRecognition] = useState<SpeechRecognition | null>(null);
+
+  // Load global settings from database
+  useEffect(() => {
+    const loadSettings = async () => {
+      try {
+        const dbSettings = await loadGlobalSettings();
+        if (dbSettings) {
+          setSettings(dbSettings);
+          // Apply critical settings immediately
+          if (dbSettings.apiKey) {
+            setApiKey(dbSettings.apiKey);
+            localStorage.setItem('gemini_api_key', dbSettings.apiKey);
+          }
+        } else {
+          // Use defaults if no settings found
+          setSettings(defaultSettings);
+        }
+      } catch (error) {
+        console.error("Failed to load assistant settings:", error);
+        setSettings(defaultSettings);
+      }
+    };
+    
+    loadSettings();
+  }, []);
 
   // Initialize speech recognition if available
   useEffect(() => {
@@ -85,6 +142,32 @@ export function AssistantProvider({ children }: { children: ReactNode }) {
     }
   }, [apiKey]);
 
+  const speakMessage = (text: string) => {
+    if (!settings?.voiceEnabled || !speechSynthesis) return;
+    
+    stopSpeaking(); // Stop any ongoing speech
+    
+    const utterance = new SpeechSynthesisUtterance(text);
+    
+    // Apply voice settings if available
+    if (settings) {
+      // Find the voice that matches the selected voice name
+      const voices = speechSynthesis.getVoices();
+      const voice = voices.find(v => v.name === settings.selectedVoice) || 
+                    voices.find(v => v.lang.startsWith('en')) || 
+                    null;
+      
+      if (voice) utterance.voice = voice;
+      utterance.rate = settings.speechSpeed || 1;
+    }
+    
+    utterance.onstart = () => setIsSpeaking(true);
+    utterance.onend = () => setIsSpeaking(false);
+    utterance.onerror = () => setIsSpeaking(false);
+    
+    speechSynthesis.speak(utterance);
+  };
+
   const addMessage = (content: string, role: 'user' | 'assistant') => {
     const newMessage: Message = {
       id: Date.now().toString(),
@@ -94,13 +177,9 @@ export function AssistantProvider({ children }: { children: ReactNode }) {
     };
     setMessages((prev) => [...prev, newMessage]);
     
-    // If it's an assistant message, speak it out
-    if (role === 'assistant' && speechSynthesis) {
-      const utterance = new SpeechSynthesisUtterance(content);
-      utterance.onstart = () => setIsSpeaking(true);
-      utterance.onend = () => setIsSpeaking(false);
-      utterance.onerror = () => setIsSpeaking(false);
-      speechSynthesis.speak(utterance);
+    // If it's an assistant message and voice is enabled, speak it out
+    if (role === 'assistant' && settings?.voiceEnabled && speechSynthesis) {
+      speakMessage(content);
     }
   };
 
@@ -158,28 +237,45 @@ export function AssistantProvider({ children }: { children: ReactNode }) {
     try {
       setIsProcessing(true);
       
-      // Get conversation history for context (last 10 messages)
-      const recentMessages = messages.slice(-10).map(msg => ({
+      // Track this query in history if analytics collection is enabled
+      if (settings?.analyticsCollection !== false) {
+        addToHistory(content);
+      }
+      
+      // Get conversation history for context
+      const contextSize = settings?.maxContext || 10;
+      const recentMessages = messages.slice(-contextSize).map(msg => ({
         role: msg.role,
         parts: [{ text: msg.content }]
       }));
       
-      // Make API request to Gemini API
-      const response = await fetch('https://generativelanguage.googleapis.com/v1beta/models/gemini-1.5-pro:generateContent?key=' + apiKey, {
+      // Add system prompt if available
+      const systemPrompt = settings?.systemPrompt || defaultSettings.systemPrompt;
+      const allMessages = systemPrompt ? [
+        { role: 'user', parts: [{ text: systemPrompt }] },
+        { role: 'assistant', parts: [{ text: 'I understand and will follow these instructions.' }] },
+        ...recentMessages
+      ] : recentMessages;
+      
+      // Make API request to Gemini API with current settings
+      const modelName = settings?.model || "gemini-1.5-pro";
+      const temp = settings?.temperature || 0.7;
+      
+      const response = await fetch(`https://generativelanguage.googleapis.com/v1beta/models/${modelName}:generateContent?key=${apiKey}`, {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',
         },
         body: JSON.stringify({
           contents: [
-            ...recentMessages,
+            ...allMessages,
             {
               role: 'user',
               parts: [{ text: content }]
             }
           ],
           generationConfig: {
-            temperature: 0.7,
+            temperature: temp,
             topK: 40,
             topP: 0.95,
             maxOutputTokens: 1024,
@@ -248,7 +344,9 @@ export function AssistantProvider({ children }: { children: ReactNode }) {
     isSpeaking,
     isListening,
     toggleListening,
-    stopSpeaking
+    stopSpeaking,
+    speakMessage,
+    settings
   };
 
   return (

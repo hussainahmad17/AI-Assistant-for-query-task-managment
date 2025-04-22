@@ -1,5 +1,5 @@
 
-import { useEffect } from "react";
+import { useEffect, useState } from "react";
 import { motion } from "framer-motion";
 import DashboardLayout from "@/components/layouts/DashboardLayout";
 import { AnalyticsCard } from "@/components/analytics/AnalyticsCard";
@@ -12,6 +12,24 @@ import { useToast } from "@/components/ui/use-toast";
 const Dashboard = () => {
   const { history } = useHistory();
   const { toast } = useToast();
+  const [refreshTrigger, setRefreshTrigger] = useState(0);
+  
+  // Listen for analytics update events
+  useEffect(() => {
+    const handleAnalyticsUpdate = () => {
+      // Force a refresh of analytics data
+      setRefreshTrigger(prev => prev + 1);
+    };
+    
+    // Add event listeners for real-time updates
+    window.addEventListener('analyticsUpdate', handleAnalyticsUpdate);
+    window.addEventListener('analyticsClear', handleAnalyticsUpdate);
+    
+    return () => {
+      window.removeEventListener('analyticsUpdate', handleAnalyticsUpdate);
+      window.removeEventListener('analyticsClear', handleAnalyticsUpdate);
+    };
+  }, []);
   
   useEffect(() => {
     document.title = "Analytics Dashboard - Personal Assistant";
@@ -62,6 +80,7 @@ const Dashboard = () => {
       <motion.div 
         initial={{ opacity: 0 }}
         animate={{ opacity: 1 }}
+        key={refreshTrigger} // Force re-render when refreshTrigger changes
       >
         <h1 className="text-3xl font-bold mb-6">Analytics Dashboard</h1>
         
@@ -103,10 +122,10 @@ const Dashboard = () => {
         
         <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
           <div className="lg:col-span-2">
-            <QueryChart />
+            <QueryChart key={`chart-${refreshTrigger}`} />
           </div>
           <div className="lg:col-span-1">
-            <TopQueriesList />
+            <TopQueriesList key={`list-${refreshTrigger}`} />
           </div>
         </div>
       </motion.div>

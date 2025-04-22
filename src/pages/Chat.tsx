@@ -11,11 +11,11 @@ import { BrainCircuit } from "lucide-react";
 import { Link } from "react-router-dom";
 
 const Chat = () => {
-  const { apiKey } = useAssistant();
+  const { apiKey, settings } = useAssistant();
 
   useEffect(() => {
-    document.title = "Chat - Personal Assistant";
-  }, []);
+    document.title = `${settings?.assistantName || 'Chat'} - Personal Assistant`;
+  }, [settings]);
 
   return (
     <DashboardLayout>
@@ -27,7 +27,7 @@ const Chat = () => {
         <div className="flex items-center justify-between mb-6">
           <div className="flex items-center gap-2">
             <BrainCircuit className="h-8 w-8 text-primary" />
-            <h1 className="text-3xl font-bold">Personal Assistant</h1>
+            <h1 className="text-3xl font-bold">{settings?.assistantName || 'Personal Assistant'}</h1>
           </div>
           
           {apiKey && (
