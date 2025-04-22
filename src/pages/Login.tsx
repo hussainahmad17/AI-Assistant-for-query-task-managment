@@ -8,6 +8,7 @@ import { Label } from "@/components/ui/label";
 import { useToast } from "@/hooks/use-toast";
 import { Eye, EyeOff } from "lucide-react";
 import { useAuth } from "@/contexts/AuthContext";
+import { supabase } from "@/integrations/supabase/client";
 
 const Login = () => {
   const [email, setEmail] = useState("");
@@ -42,7 +43,7 @@ const Login = () => {
   const handleSocial = async (provider: 'google' | 'facebook') => {
     setErrorMsg("");
     try {
-      const { error } = await window.supabase.auth.signInWithOAuth({ provider });
+      const { error } = await supabase.auth.signInWithOAuth({ provider });
       if (error) setErrorMsg(error.message);
     } catch (err: any) {
       setErrorMsg("Unable to continue with selected provider.");

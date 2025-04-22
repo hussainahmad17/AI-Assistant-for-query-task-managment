@@ -8,7 +8,8 @@ import { Label } from "@/components/ui/label";
 import { useToast } from "@/hooks/use-toast";
 import { useAuth } from "@/contexts/AuthContext";
 import { PasswordStrengthHint } from "@/components/auth/PasswordStrengthHint";
-import { Eye, EyeOff, facebook, google } from "lucide-react";
+import { Eye, EyeOff } from "lucide-react";
+import { supabase } from "@/integrations/supabase/client";
 
 const Register = () => {
   const [email, setEmail] = useState("");
@@ -66,7 +67,7 @@ const Register = () => {
     setLoading(true);
     setErrorMsg("");
     try {
-      const { error } = await window.supabase.auth.signInWithOAuth({ provider });
+      const { error } = await supabase.auth.signInWithOAuth({ provider });
       if (error) setErrorMsg(error.message);
     } catch (err: any) {
       setErrorMsg("Unable to continue with selected provider.");
