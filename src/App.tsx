@@ -10,6 +10,7 @@ import Login from "@/pages/Login";
 import Register from "@/pages/Register";
 import { AuthProvider } from "./contexts/AuthContext";
 import { AssistantProvider } from "./contexts/AssistantContext";
+import { HistoryProvider } from "./contexts/HistoryContext";
 import ChatHistory from "@/pages/ChatHistory";
 import NotFound from "@/pages/NotFound";
 import AuthLayout from "@/components/layouts/AuthLayout";
@@ -65,9 +66,11 @@ const router = createBrowserRouter(routes);
 function App() {
   return (
     <AuthProvider>
-      <AssistantProvider>
-        <RouterProvider router={router} />
-      </AssistantProvider>
+      <HistoryProvider>
+        <AssistantProvider>
+          <RouterProvider router={router} />
+        </AssistantProvider>
+      </HistoryProvider>
     </AuthProvider>
   );
 }
