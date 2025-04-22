@@ -1,46 +1,12 @@
-
-import React, { createContext, useContext, useState, useEffect, ReactNode } from 'react';
-import { useToast } from '@/hooks/use-toast';
-import { loadGlobalSettings } from '@/utils/globalSettings';
-import { useHistory } from '@/contexts/HistoryContext';
-import { supabase } from '@/integrations/supabase/client';
-import { useAuth } from './AuthContext';
-
-interface AssistantContextType {
-  messages: Message[];
-  addMessage: (content: string, role: 'user' | 'assistant') => void;
-  isProcessing: boolean;
-  sendMessage: (content: string) => Promise<void>;
-  clearConversation: () => void;
-  apiKey: string | null;
-  setApiKey: (key: string) => void;
-  isSpeaking: boolean;
-  isListening: boolean;
-  toggleListening: () => void;
-  stopSpeaking: () => void;
-  speakMessage: (text: string) => void;
-  settings: AssistantSettings | null;
-}
-
-interface Message {
-  id: string;
-  content: string;
-  role: 'user' | 'assistant';
-  timestamp: Date;
-}
-
-interface AssistantSettings {
-  assistantName: string;
-  maxContext: number;
-  analyticsCollection: boolean;
-  apiKey: string;
-  model: string;
-  temperature: number;
-  voiceEnabled: boolean;
-  selectedVoice: string;
-  speechSpeed: number;
-  systemPrompt: string;
-}
+import React, { createContext, useContext, useState, useEffect, ReactNode, useCallback } from "react";
+import { useToast } from "@/hooks/use-toast";
+import { loadGlobalSettings } from "@/utils/globalSettings";
+import { useHistory } from "@/contexts/HistoryContext";
+import { supabase } from "@/integrations/supabase/client";
+import { useAuth } from "./AuthContext";
+import { AssistantContextType, Message, AssistantSettings } from "./assistant/types";
+import { useAssistantSpeech } from "./assistant/useAssistantSpeech";
+import { useAssistantRecognition } from "./assistant/useAssistantRecognition";
 
 const defaultSettings: AssistantSettings = {
   assistantName: "Personal Assistant",
@@ -52,7 +18,7 @@ const defaultSettings: AssistantSettings = {
   voiceEnabled: true,
   selectedVoice: "en-US-Standard-B",
   speechSpeed: 1,
-  systemPrompt: "You are a helpful AI assistant that provides accurate, concise, and helpful information."
+  systemPrompt: "You are a helpful AI assistant that provides accurate, concise, and helpful information.",
 };
 
 const AssistantContext = createContext<AssistantContextType | undefined>(undefined);
@@ -61,20 +27,72 @@ export function AssistantProvider({ children }: { children: ReactNode }) {
   const [messages, setMessages] = useState<Message[]>([]);
   const [isProcessing, setIsProcessing] = useState(false);
   const [apiKey, setApiKey] = useState<string | null>(localStorage.getItem('gemini_api_key'));
-  const [isSpeaking, setIsSpeaking] = useState(false);
-  const [isListening, setIsListening] = useState(false);
   const [settings, setSettings] = useState<AssistantSettings | null>(null);
   const [retryCount, setRetryCount] = useState(0);
   const [isProcessingVoice, setIsProcessingVoice] = useState(false);
   const { toast } = useToast();
   const { addToHistory } = useHistory();
   const { user } = useAuth();
-  
-  // Speech synthesis
-  const speechSynthesis = window.speechSynthesis;
-  const [recognition, setRecognition] = useState<SpeechRecognition | null>(null);
 
-  // Load conversation history from localStorage on mount
+  // SPEECH SYNTHESIS
+  const { isSpeaking, speakMessage, stopSpeaking } = useAssistantSpeech(settings);
+
+  // SPEECH RECOGNITION
+  const [inputToProcess, setInputToProcess] = useState<string | null>(null);
+  // onResult should only process a single transcript at a time!
+  const recognitionFns = useAssistantRecognition(
+    (transcript) => setInputToProcess(transcript),
+    (error) => {
+      toast({
+        title: "Voice Input Error",
+        description: `Error: ${error}. Please try again later.`,
+        variant: 'destructive',
+      });
+      setIsProcessingVoice(false);
+    },
+    () => {
+      setIsProcessingVoice(false);
+    }
+  );
+  const isListening = recognitionFns.isListening;
+  const toggleListening = () => {
+    if (!window.SpeechRecognition && !window.webkitSpeechRecognition) {
+      toast({
+        title: 'Speech Recognition Unavailable',
+        description: 'Your browser does not support speech recognition. Try using Chrome or Edge.',
+        variant: 'destructive',
+      });
+      return;
+    }
+    if (isListening || isProcessingVoice) {
+      recognitionFns.stopListening();
+      setIsProcessingVoice(false);
+    } else {
+      setIsProcessingVoice(true);
+      recognitionFns.startListening();
+      toast({
+        title: 'Listening...',
+        description: "Speak now. I'm listening to your voice input.",
+        variant: 'default',
+      });
+    }
+  };
+
+  // Only process a transcript once per voice input session -- prevent double queries
+  useEffect(() => {
+    if (inputToProcess) {
+      (async () => {
+        setIsProcessingVoice(true);
+        await addMessage(inputToProcess, "user");
+        await sendMessage(inputToProcess);
+        setInputToProcess(null);
+        setIsProcessingVoice(false);
+      })();
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [inputToProcess]);
+
+  // Load conversation history and settings logic (unchanged, extracted for brevity)
   useEffect(() => {
     const loadConversationHistory = async () => {
       // Clear any existing conversation on page load to ensure fresh state
@@ -111,7 +129,6 @@ export function AssistantProvider({ children }: { children: ReactNode }) {
     loadConversationHistory();
   }, [user]);
   
-  // Load global settings from database
   useEffect(() => {
     const loadSettings = async () => {
       try {
@@ -159,330 +176,163 @@ export function AssistantProvider({ children }: { children: ReactNode }) {
     };
   }, []);
 
-  // Initialize speech recognition if available
-  useEffect(() => {
-    try {
-      // Check if SpeechRecognition is available
-      const SpeechRecognition = window.SpeechRecognition || window.webkitSpeechRecognition;
-      
-      if (SpeechRecognition) {
-        const recognitionInstance = new SpeechRecognition();
-        recognitionInstance.continuous = false;
-        recognitionInstance.interimResults = false;
-        
-        recognitionInstance.onresult = (event) => {
-          if (isProcessingVoice) return; // Prevent double processing
-          
-          const transcript = event.results[0][0].transcript;
-          setIsProcessingVoice(true);
-          
-          // Add the transcript as a user message
-          addMessage(transcript, 'user');
-          
-          // Process the message
-          sendMessage(transcript)
-            .catch(error => {
-              console.error('Error processing voice input:', error);
-            })
-            .finally(() => {
-              setIsProcessingVoice(false);
-            });
-        };
-        
-        recognitionInstance.onerror = (event) => {
-          console.error('Speech recognition error', event.error);
-          setIsListening(false);
-          setIsProcessingVoice(false);
-          toast({
-            title: 'Voice Input Error',
-            description: `Error: ${event.error}. Please try again later.`,
-            variant: 'destructive',
-          });
-        };
-        
-        recognitionInstance.onend = () => {
-          setIsListening(false);
-        };
-        
-        setRecognition(recognitionInstance);
-      } else {
-        console.warn('Speech Recognition API not supported in this browser');
-      }
-    } catch (error) {
-      console.error('Error initializing speech recognition:', error);
-    }
-  }, []);
-  
-  // Save API key to local storage when it changes
   useEffect(() => {
     if (apiKey) {
       localStorage.setItem('gemini_api_key', apiKey);
     }
   }, [apiKey]);
 
-  // Clean text for speech synthesis (remove markdown symbols)
-  const cleanTextForSpeech = (text: string) => {
-    return text
-      .replace(/\*\*(.*?)\*\*/g, '$1') // Remove bold markers
-      .replace(/\*(.*?)\*/g, '$1')     // Remove italic markers
-      .replace(/`(.*?)`/g, '$1')       // Remove code markers
-      .replace(/#{1,6}\s+/g, '')       // Remove headings
-      .replace(/\[(.*?)\]\((.*?)\)/g, '$1') // Convert links to just the text
-      .replace(/\n\n/g, '. ')          // Replace double newlines with periods
-      .replace(/\n/g, ' ');            // Replace single newlines with spaces
-  };
-
-  const speakMessage = (text: string) => {
-    if (!settings?.voiceEnabled || !speechSynthesis) return;
-    
-    stopSpeaking(); // Stop any ongoing speech
-    
-    const cleanedText = cleanTextForSpeech(text);
-    const utterance = new SpeechSynthesisUtterance(cleanedText);
-    
-    // Apply voice settings if available
-    if (settings) {
-      // Find the voice that matches the selected voice name
-      const voices = speechSynthesis.getVoices();
-      const voice = voices.find(v => v.name === settings.selectedVoice) || 
-                    voices.find(v => v.lang.startsWith('en')) || 
-                    null;
-      
-      if (voice) utterance.voice = voice;
-      utterance.rate = settings.speechSpeed || 1;
-    }
-    
-    utterance.onstart = () => setIsSpeaking(true);
-    utterance.onend = () => setIsSpeaking(false);
-    utterance.onerror = () => setIsSpeaking(false);
-    
-    speechSynthesis.speak(utterance);
-  };
-
-  const addMessage = async (content: string, role: 'user' | 'assistant') => {
-    const newMessage: Message = {
-      id: Date.now().toString(),
-      content,
-      role,
-      timestamp: new Date(),
-    };
-    
-    setMessages((prev) => [...prev, newMessage]);
-    
-    // If it's an assistant message and voice is enabled, speak it out
-    if (role === 'assistant' && settings?.voiceEnabled && speechSynthesis) {
-      speakMessage(content);
-    }
-    
-    // Save conversation to Supabase if user is logged in
-    if (user) {
-      try {
-        // Use type assertion to bypass TypeScript's type checking
-        await (supabase
-          .from('conversation_history') as any)
-          .insert([{
+  const addMessage = useCallback(
+    async (content: string, role: 'user' | 'assistant') => {
+      const newMessage: Message = {
+        id: Date.now().toString(),
+        content,
+        role,
+        timestamp: new Date(),
+      };
+      setMessages((prev) => [...prev, newMessage]);
+      if (role === "assistant" && settings?.voiceEnabled) {
+        speakMessage(content);
+      }
+      if (user) {
+        try {
+          await (supabase.from('conversation_history') as any).insert([{
             user_id: user.id,
-            content: content,
-            role: role,
+            content,
+            role,
             created_at: new Date().toISOString()
           }]);
-      } catch (error) {
-        console.error('Failed to save conversation to Supabase', error);
+        } catch (error) {
+          console.error('Failed to save conversation to Supabase', error);
+        }
       }
-    }
-  };
+    },
+    [settings, speakMessage, user]
+  );
 
-  const stopSpeaking = () => {
-    if (speechSynthesis) {
-      speechSynthesis.cancel();
-      setIsSpeaking(false);
-    }
-  };
-
-  const toggleListening = () => {
-    if (!recognition) {
-      toast({
-        title: 'Speech Recognition Unavailable',
-        description: 'Your browser does not support speech recognition. Try using Chrome or Edge.',
-        variant: 'destructive',
-      });
-      return;
-    }
-
-    if (isListening || isProcessingVoice) {
-      recognition.stop();
-      setIsListening(false);
-    } else {
-      try {
-        recognition.start();
-        setIsListening(true);
+  const sendMessage = useCallback(
+    async (content: string) => {
+      if (!apiKey) {
         toast({
-          title: 'Listening...',
-          description: 'Speak now. I\'m listening to your voice input.',
-          variant: 'default',
-        });
-      } catch (error) {
-        console.error('Failed to start speech recognition', error);
-        setIsListening(false);
-        toast({
-          title: 'Speech Recognition Error',
-          description: 'Failed to start speech recognition. Please try again.',
+          title: 'API Key Missing',
+          description: 'Please set your Gemini API key in the settings.',
           variant: 'destructive',
         });
+        return;
       }
-    }
-  };
-
-  const sendMessage = async (content: string) => {
-    if (!apiKey) {
-      toast({
-        title: 'API Key Missing',
-        description: 'Please set your Gemini API key in the settings.',
-        variant: 'destructive',
-      });
-      return;
-    }
-
-    try {
-      setIsProcessing(true);
-      
-      // Add user message to conversation first
-      if (messages.length === 0 || messages[messages.length - 1].role !== 'user') {
-        await addMessage(content, 'user');
-      }
-      
-      // Track this query in history if analytics collection is enabled
-      if (settings?.analyticsCollection !== false) {
-        addToHistory(content);
-      }
-      
-      // Get conversation history for context
-      const contextSize = settings?.maxContext || 10;
-      const recentMessages = messages.slice(-contextSize).map(msg => ({
-        role: msg.role,
-        parts: [{ text: msg.content }]
-      }));
-      
-      // Add system prompt if available
-      const systemPrompt = settings?.systemPrompt || defaultSettings.systemPrompt;
-      const allMessages = systemPrompt ? [
-        { role: 'user', parts: [{ text: systemPrompt }] },
-        { role: 'assistant', parts: [{ text: 'I understand and will follow these instructions.' }] },
-        ...recentMessages
-      ] : recentMessages;
-      
-      // Make API request to Gemini API with current settings
-      const modelName = settings?.model || "gemini-1.5-pro";
-      const temp = settings?.temperature || 0.7;
-      
-      const response = await fetch(`https://generativelanguage.googleapis.com/v1beta/models/${modelName}:generateContent?key=${apiKey}`, {
-        method: 'POST',
-        headers: {
-          'Content-Type': 'application/json',
-        },
-        body: JSON.stringify({
-          contents: [
-            ...allMessages,
-            {
-              role: 'user',
-              parts: [{ text: content }]
-            }
-          ],
-          generationConfig: {
-            temperature: temp,
-            topK: 40,
-            topP: 0.95,
-            maxOutputTokens: 1024,
-          },
-          safetySettings: [
-            {
-              category: "HARM_CATEGORY_HARASSMENT",
-              threshold: "BLOCK_MEDIUM_AND_ABOVE"
-            },
-            {
-              category: "HARM_CATEGORY_HATE_SPEECH",
-              threshold: "BLOCK_MEDIUM_AND_ABOVE"
-            },
-            {
-              category: "HARM_CATEGORY_SEXUALLY_EXPLICIT",
-              threshold: "BLOCK_MEDIUM_AND_ABOVE"
-            },
-            {
-              category: "HARM_CATEGORY_DANGEROUS_CONTENT",
-              threshold: "BLOCK_MEDIUM_AND_ABOVE"
-            }
-          ]
-        }),
-      });
-
-      if (!response.ok) {
-        const errorData = await response.json();
-        const errorMessage = errorData.error?.message || 'Unknown error';
-        
-        // Handle overloaded model error with retry
-        if (errorMessage.includes('overloaded') && retryCount < 3) {
-          setRetryCount(prev => prev + 1);
-          
-          toast({
-            title: 'Model Overloaded',
-            description: `Retrying in 2 seconds... (Attempt ${retryCount + 1}/3)`,
-            variant: 'default',
-          });
-          
-          // Wait 2 seconds and retry
-          setTimeout(() => sendMessage(content), 2000);
-          return;
+      try {
+        setIsProcessing(true);
+        if (messages.length === 0 || messages[messages.length - 1].role !== 'user') {
+          await addMessage(content, 'user');
         }
-        
-        throw new Error(`API Error: ${errorMessage}`);
+        if (settings?.analyticsCollection !== false) {
+          addToHistory(content);
+        }
+        const contextSize = settings?.maxContext || 10;
+        const recentMessages = messages.slice(-contextSize).map(msg => ({
+          role: msg.role,
+          parts: [{ text: msg.content }]
+        }));
+        const systemPrompt = settings?.systemPrompt || defaultSettings.systemPrompt;
+        const allMessages = systemPrompt ? [
+          { role: 'user', parts: [{ text: systemPrompt }] },
+          { role: 'assistant', parts: [{ text: 'I understand and will follow these instructions.' }] },
+          ...recentMessages
+        ] : recentMessages;
+        const modelName = settings?.model || "gemini-1.5-pro";
+        const temp = settings?.temperature || 0.7;
+        const response = await fetch(`https://generativelanguage.googleapis.com/v1beta/models/${modelName}:generateContent?key=${apiKey}`, {
+          method: 'POST',
+          headers: {
+            'Content-Type': 'application/json',
+          },
+          body: JSON.stringify({
+            contents: [
+              ...allMessages,
+              {
+                role: 'user',
+                parts: [{ text: content }]
+              }
+            ],
+            generationConfig: {
+              temperature: temp,
+              topK: 40,
+              topP: 0.95,
+              maxOutputTokens: 1024,
+            },
+            safetySettings: [
+              {
+                category: "HARM_CATEGORY_HARASSMENT",
+                threshold: "BLOCK_MEDIUM_AND_ABOVE"
+              },
+              {
+                category: "HARM_CATEGORY_HATE_SPEECH",
+                threshold: "BLOCK_MEDIUM_AND_ABOVE"
+              },
+              {
+                category: "HARM_CATEGORY_SEXUALLY_EXPLICIT",
+                threshold: "BLOCK_MEDIUM_AND_ABOVE"
+              },
+              {
+                category: "HARM_CATEGORY_DANGEROUS_CONTENT",
+                threshold: "BLOCK_MEDIUM_AND_ABOVE"
+              }
+            ]
+          }),
+        });
+        if (!response.ok) {
+          const errorData = await response.json();
+          const errorMessage = errorData.error?.message || 'Unknown error';
+          if (errorMessage.includes('overloaded') && retryCount < 3) {
+            setRetryCount(prev => prev + 1);
+            toast({
+              title: 'Model Overloaded',
+              description: `Retrying in 2 seconds... (Attempt ${retryCount + 1}/3)`,
+              variant: 'default',
+            });
+            setTimeout(() => sendMessage(content), 2000);
+            return;
+          }
+          throw new Error(`API Error: ${errorMessage}`);
+        }
+        setRetryCount(0);
+        const data = await response.json();
+        if (data.candidates && data.candidates.length > 0 && 
+            data.candidates[0].content && data.candidates[0].content.parts && 
+            data.candidates[0].content.parts.length > 0) {
+          const assistantResponse = data.candidates[0].content.parts[0].text;
+          await addMessage(assistantResponse, 'assistant');
+        } else {
+          throw new Error('Invalid response format from Gemini API');
+        }
+      } catch (error) {
+        console.error('Error sending message:', error);
+        toast({
+          title: 'Error',
+          description: error instanceof Error ? error.message : 'Failed to get response from Gemini',
+          variant: 'destructive',
+        });
+      } finally {
+        setIsProcessing(false);
       }
+    },
+    [apiKey, messages, settings, addMessage, addToHistory, toast]
+  );
 
-      // Reset retry count on success
-      setRetryCount(0);
-      const data = await response.json();
-      
-      if (data.candidates && data.candidates.length > 0 && 
-          data.candidates[0].content && data.candidates[0].content.parts && 
-          data.candidates[0].content.parts.length > 0) {
-        const assistantResponse = data.candidates[0].content.parts[0].text;
-        await addMessage(assistantResponse, 'assistant');
-      } else {
-        throw new Error('Invalid response format from Gemini API');
-      }
-    } catch (error) {
-      console.error('Error sending message:', error);
-      toast({
-        title: 'Error',
-        description: error instanceof Error ? error.message : 'Failed to get response from Gemini',
-        variant: 'destructive',
-      });
-    } finally {
-      setIsProcessing(false);
-    }
-  };
-
-  const clearConversation = async () => {
+  const clearConversation = useCallback(async () => {
     setMessages([]);
     stopSpeaking();
-    
-    // Remove from localStorage
-    localStorage.removeItem('conversation_history');
-    
-    // Clear from Supabase if user is logged in
+    localStorage.removeItem("conversation_history");
     if (user) {
       try {
-        // Use type assertion to bypass TypeScript's type checking
-        await (supabase
-          .from('conversation_history') as any)
-          .delete()
-          .eq('user_id', user.id);
+        await (supabase.from('conversation_history') as any).delete().eq('user_id', user.id);
       } catch (error) {
         console.error('Failed to clear conversation from Supabase', error);
       }
     }
-  };
+  }, [user, stopSpeaking]);
 
-  const value = {
+  const value: AssistantContextType = {
     messages,
     addMessage,
     isProcessing,
@@ -495,7 +345,7 @@ export function AssistantProvider({ children }: { children: ReactNode }) {
     toggleListening,
     stopSpeaking,
     speakMessage,
-    settings
+    settings,
   };
 
   return (
@@ -508,7 +358,7 @@ export function AssistantProvider({ children }: { children: ReactNode }) {
 export function useAssistant() {
   const context = useContext(AssistantContext);
   if (context === undefined) {
-    throw new Error('useAssistant must be used within an AssistantProvider');
+    throw new Error("useAssistant must be used within an AssistantProvider");
   }
   return context;
 }
