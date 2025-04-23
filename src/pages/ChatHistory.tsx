@@ -9,10 +9,12 @@ import { useToast } from "@/components/ui/use-toast";
 import { TrashIcon, Clock, DownloadIcon, Search, ChevronDown, ChevronUp } from "lucide-react";
 import { motion } from "framer-motion";
 import { Input } from "@/components/ui/input";
+import { useIsMobile } from "@/hooks/use-mobile";
 
 const ChatHistory = () => {
   const { history, clearHistory } = useHistory();
   const { toast } = useToast();
+  const isMobile = useIsMobile();
   const [searchQuery, setSearchQuery] = useState("");
   const [filteredHistory, setFilteredHistory] = useState(history);
   const [activeTab, setActiveTab] = useState("all");
@@ -107,6 +109,7 @@ const ChatHistory = () => {
         initial={{ opacity: 0 }}
         animate={{ opacity: 1 }}
         id="main-content"
+        className="px-4 md:px-0"
       >
         <div className="flex flex-col gap-6">
           <div className="flex flex-col md:flex-row items-start md:items-center justify-between gap-4">
@@ -155,12 +158,18 @@ const ChatHistory = () => {
               </div>
               
               <Tabs defaultValue="all" className="w-full md:w-auto" onValueChange={setActiveTab}>
-                <TabsList className="grid grid-cols-4 md:w-[400px]">
+                <TabsList className={`grid ${isMobile ? 'grid-cols-2' : 'grid-cols-4'} md:w-[400px]`}>
                   <TabsTrigger value="all">All</TabsTrigger>
                   <TabsTrigger value="today">Today</TabsTrigger>
-                  <TabsTrigger value="week">This Week</TabsTrigger>
-                  <TabsTrigger value="month">This Month</TabsTrigger>
+                  {!isMobile && <TabsTrigger value="week">This Week</TabsTrigger>}
+                  {!isMobile && <TabsTrigger value="month">This Month</TabsTrigger>}
                 </TabsList>
+                {isMobile && (
+                  <TabsList className="grid grid-cols-2 mt-2">
+                    <TabsTrigger value="week">This Week</TabsTrigger>
+                    <TabsTrigger value="month">This Month</TabsTrigger>
+                  </TabsList>
+                )}
               </Tabs>
             </div>
             
@@ -182,7 +191,7 @@ const ChatHistory = () => {
                   <Card key={index} className="overflow-hidden">
                     <CardHeader className="pb-2">
                       <div className="flex justify-between items-start">
-                        <div>
+                        <div className="flex-1 pr-2">
                           <CardTitle className="text-base font-medium line-clamp-1">
                             {item.query}
                           </CardTitle>
@@ -206,11 +215,9 @@ const ChatHistory = () => {
                           <p className={expandedItems[item.id] ? "" : "line-clamp-3"}>
                             <strong>Question:</strong> {item.query}
                           </p>
-                          {item.response && (
-                            <p className={`mt-2 ${expandedItems[item.id] ? "" : "line-clamp-3"}`}>
-                              <strong>Response:</strong> {item.response}
-                            </p>
-                          )}
+                          <p className={`mt-2 ${expandedItems[item.id] ? "" : "line-clamp-3"}`}>
+                            <strong>Response:</strong> {item.response || "No response stored"}
+                          </p>
                         </div>
                       </div>
                     </CardContent>

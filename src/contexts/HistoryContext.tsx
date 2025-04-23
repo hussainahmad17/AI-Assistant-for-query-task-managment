@@ -6,7 +6,7 @@ import { useAuth } from './AuthContext';
 interface HistoryItem {
   id: string;
   query: string;
-  response: string; // Now properly defined as required
+  response: string;
   timestamp: Date;
 }
 

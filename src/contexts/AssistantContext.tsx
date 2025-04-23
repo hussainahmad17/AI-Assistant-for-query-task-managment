@@ -35,12 +35,7 @@ export function AssistantProvider({ children }: { children: ReactNode }) {
   const { addToHistory } = useHistory();
   const { user } = useAuth();
 
-  const { isSpeaking, speakMessage, stopSpeaking } = useAssistantSpeech(settings);
-
-  const [inputToProcess, setInputToProcess] = useState<string | null>(null);
-
-  // Define addMessage and sendMessage before using them in useEffect
-
+  // Define addMessage before using it in any other function
   const addMessage = useCallback(
     async (content: string, role: 'user' | 'assistant') => {
       const newMessage: Message = {
@@ -68,8 +63,10 @@ export function AssistantProvider({ children }: { children: ReactNode }) {
         }
       }
     },
-    [settings, speakMessage, user]
+    [settings, user]
   );
+
+  const { isSpeaking, speakMessage, stopSpeaking } = useAssistantSpeech(settings);
 
   const sendMessage = useCallback(
     async (content: string) => {
@@ -87,7 +84,7 @@ export function AssistantProvider({ children }: { children: ReactNode }) {
           await addMessage(content, 'user');
         }
         if (settings?.analyticsCollection !== false) {
-          addToHistory(content);
+          addToHistory(content, ""); // Initialize with empty response, will update later
         }
         const contextSize = settings?.maxContext || 10;
         const recentMessages = messages.slice(-contextSize).map(msg => ({
@@ -163,6 +160,11 @@ export function AssistantProvider({ children }: { children: ReactNode }) {
             data.candidates[0].content.parts.length > 0) {
           const assistantResponse = data.candidates[0].content.parts[0].text;
           await addMessage(assistantResponse, 'assistant');
+          
+          // Update the history with the response
+          if (settings?.analyticsCollection !== false) {
+            addToHistory(content, assistantResponse);
+          }
         } else {
           throw new Error('Invalid response format from Gemini API');
         }
@@ -179,6 +181,8 @@ export function AssistantProvider({ children }: { children: ReactNode }) {
     },
     [apiKey, messages, settings, addMessage, addToHistory, toast, retryCount]
   );
+
+  const [inputToProcess, setInputToProcess] = useState<string | null>(null);
 
   const recognitionFns = useAssistantRecognition(
     (transcript) => setInputToProcess(transcript),

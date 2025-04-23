@@ -67,18 +67,24 @@ export const AuthProvider = ({ children }: { children: React.ReactNode }) => {
     setLoading(false);
   };
 
-  // Updated OAuth sign in method with better redirect handling
+  // Fixed OAuth sign in method with better browser compatibility
   const signInWithOAuth = async (provider: 'google' | 'facebook') => {
     setLoading(true);
     try {
-      // Get the current URL's origin (e.g., http://localhost:5173)
-      const redirectTo = `${window.location.origin}/chat`;
+      // Get the current URL's origin for the redirect
+      const origin = window.location.origin;
+      const redirectUrl = `${origin}/chat`;
       
-      const { error } = await supabase.auth.signInWithOAuth({ 
+      const { data, error } = await supabase.auth.signInWithOAuth({ 
         provider,
         options: {
-          redirectTo: redirectTo,
-          skipBrowserRedirect: false
+          redirectTo: redirectUrl,
+          skipBrowserRedirect: false,
+          queryParams: provider === 'google' ? {
+            // Adding optional query parameters for Google OAuth
+            access_type: 'offline',
+            prompt: 'consent'
+          } : undefined
         }
       });
       

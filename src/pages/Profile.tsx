@@ -10,15 +10,20 @@ import { useToast } from "@/hooks/use-toast";
 import { motion } from "framer-motion";
 import { useAuth } from "@/contexts/AuthContext";
 import { supabase } from "@/integrations/supabase/client";
-import { Loader2, User } from "lucide-react";
+import { Loader2, User, Camera } from "lucide-react";
+import { useIsMobile } from "@/hooks/use-mobile";
 
 const Profile = () => {
   const { user } = useAuth();
   const { toast } = useToast();
+  const isMobile = useIsMobile();
   const [loading, setLoading] = useState(false);
   const [username, setUsername] = useState("");
   const [fullName, setFullName] = useState("");
   const [avatarUrl, setAvatarUrl] = useState("");
+  const [bio, setBio] = useState("");
+  const [uploading, setUploading] = useState(false);
+  const fileInputRef = React.useRef<HTMLInputElement>(null);
 
   useEffect(() => {
     document.title = "Profile - Personal Assistant";
@@ -35,16 +40,26 @@ const Profile = () => {
       setLoading(true);
       const { data, error } = await supabase
         .from('profiles')
-        .select('username, full_name, avatar_url')
+        .select('username, full_name, avatar_url, bio')
         .eq('id', user.id)
         .single();
       
-      if (error) throw error;
+      if (error) {
+        console.error('Error fetching profile:', error);
+        // Create a new profile if one doesn't exist
+        if (error.message.includes("returned no results")) {
+          await createNewProfile();
+          return;
+        } else {
+          throw error;
+        }
+      }
       
       if (data) {
         setUsername(data.username || '');
         setFullName(data.full_name || '');
         setAvatarUrl(data.avatar_url || '');
+        setBio(data.bio || '');
       }
     } catch (error) {
       console.error('Error fetching profile:', error);
@@ -58,18 +73,97 @@ const Profile = () => {
     }
   };
 
+  const createNewProfile = async () => {
+    if (!user) return;
+    
+    try {
+      const updates = {
+        id: user.id,
+        username: user.email?.split('@')[0] || '',
+        full_name: '',
+        avatar_url: '',
+        bio: '',
+        updated_at: new Date().toISOString(),
+      };
+      
+      const { error } = await supabase
+        .from('profiles')
+        .insert(updates);
+        
+      if (error) throw error;
+      
+      setUsername(updates.username);
+    } catch (error) {
+      console.error('Error creating new profile:', error);
+    }
+  };
+
+  const handleAvatarUpload = async (event: React.ChangeEvent<HTMLInputElement>) => {
+    if (!event.target.files || event.target.files.length === 0) {
+      return;
+    }
+    
+    try {
+      setUploading(true);
+      const file = event.target.files[0];
+      const fileExt = file.name.split('.').pop();
+      const fileName = `${user?.id}-${Math.random().toString(36).substring(2)}.${fileExt}`;
+      const filePath = `avatars/${fileName}`;
+      
+      // Upload the file to Supabase Storage
+      const { error: uploadError } = await supabase
+        .storage
+        .from('avatars')
+        .upload(filePath, file);
+        
+      if (uploadError) throw uploadError;
+      
+      // Get the public URL
+      const { data } = supabase
+        .storage
+        .from('avatars')
+        .getPublicUrl(filePath);
+        
+      // Update the avatar URL in state and in the profiles table
+      if (data) {
+        setAvatarUrl(data.publicUrl);
+        
+        const { error: updateError } = await supabase
+          .from('profiles')
+          .update({ avatar_url: data.publicUrl })
+          .eq('id', user?.id);
+          
+        if (updateError) throw updateError;
+        
+        toast({
+          title: "Success",
+          description: "Avatar uploaded successfully",
+        });
+      }
+    } catch (error) {
+      console.error('Error uploading avatar:', error);
+      toast({
+        title: "Error",
+        description: "Failed to upload avatar",
+        variant: "destructive",
+      });
+    } finally {
+      setUploading(false);
+    }
+  };
+
   const updateProfile = async () => {
     if (!user) return;
     
     try {
       setLoading(true);
       
-      // Fix the type mismatch by converting Date to ISO string
       const updates = {
         username,
         full_name: fullName,
         avatar_url: avatarUrl,
-        updated_at: new Date().toISOString(), // Convert Date to string
+        bio,
+        updated_at: new Date().toISOString(),
       };
       
       const { error } = await supabase
@@ -104,7 +198,7 @@ const Profile = () => {
         initial={{ opacity: 0 }}
         animate={{ opacity: 1 }}
         id="main-content"
-        className="space-y-6"
+        className="space-y-6 px-4 md:px-0"
       >
         <div>
           <h1 className="text-3xl font-bold tracking-tight">Profile Settings</h1>
@@ -119,10 +213,29 @@ const Profile = () => {
             </CardHeader>
             <CardContent className="space-y-6">
               <div className="flex flex-col items-center sm:items-start sm:flex-row gap-4">
-                <Avatar className="h-20 w-20">
-                  <AvatarImage src={avatarUrl} alt={fullName || username} />
-                  <AvatarFallback className="text-lg">{userInitial}</AvatarFallback>
-                </Avatar>
+                <div className="relative">
+                  <Avatar className="h-20 w-20">
+                    <AvatarImage src={avatarUrl} alt={fullName || username} />
+                    <AvatarFallback className="text-lg bg-primary text-primary-foreground">{userInitial}</AvatarFallback>
+                  </Avatar>
+                  <Button
+                    size="icon"
+                    className="absolute bottom-0 right-0 rounded-full h-8 w-8"
+                    variant="secondary"
+                    onClick={() => fileInputRef.current?.click()}
+                    disabled={uploading}
+                    aria-label="Upload profile picture"
+                  >
+                    {uploading ? <Loader2 className="h-4 w-4 animate-spin" /> : <Camera className="h-4 w-4" />}
+                  </Button>
+                  <input 
+                    type="file" 
+                    ref={fileInputRef}
+                    onChange={handleAvatarUpload}
+                    accept="image/*"
+                    className="hidden"
+                  />
+                </div>
                 
                 <div className="space-y-1 text-center sm:text-left">
                   <h3 className="text-lg font-medium">{fullName || username || userEmail}</h3>
@@ -152,16 +265,13 @@ const Profile = () => {
                 </div>
                 
                 <div className="space-y-2">
-                  <Label htmlFor="avatarUrl">Avatar URL</Label>
+                  <Label htmlFor="bio">Bio</Label>
                   <Input 
-                    id="avatarUrl"
-                    placeholder="https://..."
-                    value={avatarUrl}
-                    onChange={(e) => setAvatarUrl(e.target.value)}
+                    id="bio"
+                    placeholder="Tell us a bit about yourself"
+                    value={bio}
+                    onChange={(e) => setBio(e.target.value)}
                   />
-                  <p className="text-xs text-muted-foreground">
-                    Enter an image URL for your profile picture
-                  </p>
                 </div>
                 
                 <Button 
