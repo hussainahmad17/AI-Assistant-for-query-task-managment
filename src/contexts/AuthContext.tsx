@@ -68,11 +68,21 @@ export const AuthProvider = ({ children }: { children: React.ReactNode }) => {
   const signInWithOAuth = async (provider: 'google' | 'facebook') => {
     setLoading(true);
     try {
+      // Get the current URL for redirection purposes
       const origin = window.location.origin;
-      const { error } = await supabase.auth.signInWithOAuth({
+      const redirectTo = `${origin}/chat`;
+
+      // Handle browser-specific issues with redirects
+      const isFirefox = navigator.userAgent.toLowerCase().indexOf('firefox') > -1;
+      const isSafari = /^((?!chrome|android).)*safari/i.test(navigator.userAgent);
+      
+      // Log the redirect URL for debugging
+      console.log(`OAuth redirect URL: ${redirectTo}`);
+      
+      const { data, error } = await supabase.auth.signInWithOAuth({
         provider,
         options: {
-          redirectTo: `${origin}/chat`,
+          redirectTo,
           // For Google specific options
           queryParams: provider === 'google' ? {
             access_type: 'offline',

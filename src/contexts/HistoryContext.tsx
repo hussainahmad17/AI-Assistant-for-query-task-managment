@@ -98,7 +98,7 @@ export function HistoryProvider({ children }: { children: ReactNode }) {
     const newItem: HistoryItem = {
       id: Date.now().toString(),
       query,
-      response,
+      response: response || "No response stored", // Ensure response is never undefined
       timestamp: new Date(),
     };
     

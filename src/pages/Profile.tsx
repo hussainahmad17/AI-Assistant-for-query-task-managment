@@ -39,7 +39,7 @@ const Profile = () => {
     try {
       setLoading(true);
       
-      // First, check if 'bio' column exists in the profiles table
+      // First, check if profile exists
       const { data: profileData, error: profileError } = await supabase
         .from('profiles')
         .select('username, full_name, avatar_url')
@@ -62,20 +62,27 @@ const Profile = () => {
         setFullName(profileData.full_name || '');
         setAvatarUrl(profileData.avatar_url || '');
         
-        // Try to fetch bio separately to handle the case where bio column might not exist yet
+        // Try to fetch bio separately
         try {
-          const { data: bioData } = await supabase
+          const { data: bioData, error: bioError } = await supabase
             .from('profiles')
             .select('bio')
             .eq('id', user.id)
             .single();
           
-          if (bioData && bioData.bio) {
+          if (bioError) {
+            // Handle the specific error where bio column doesn't exist
+            if (bioError.message && bioError.message.includes("column 'bio' does not exist")) {
+              console.log("Bio column does not exist yet");
+              setBio("");
+            } else {
+              console.error('Error fetching bio:', bioError);
+            }
+          } else if (bioData && bioData.bio) {
             setBio(bioData.bio);
           }
         } catch (bioError) {
           console.log('Bio field might not exist yet:', bioError);
-          // We'll continue without bio data
         }
       }
     } catch (error) {
@@ -99,11 +106,10 @@ const Profile = () => {
         username: user.email?.split('@')[0] || '',
         full_name: '',
         avatar_url: '',
-        bio: '',
         updated_at: new Date().toISOString(),
       };
       
-      // First try without the bio field in case it doesn't exist
+      // Don't include bio field in case it doesn't exist
       const { error } = await supabase
         .from('profiles')
         .insert({
@@ -115,10 +121,7 @@ const Profile = () => {
         });
         
       if (error) {
-        // If there was an error and it's not related to 'bio', throw it
-        if (!error.message.includes("bio")) {
-          throw error;
-        }
+        throw error;
       }
       
       setUsername(updates.username);
@@ -192,8 +195,8 @@ const Profile = () => {
         updated_at: new Date().toISOString(),
       };
       
-      // Try to update with bio first
       try {
+        // Try with bio field
         const { error } = await supabase
           .from('profiles')
           .update({
@@ -204,7 +207,7 @@ const Profile = () => {
           
         if (error) {
           // If there's an error with bio field, try without it
-          if (error.message.includes("bio")) {
+          if (error.message && error.message.includes("bio")) {
             const { error: baseError } = await supabase
               .from('profiles')
               .update(baseUpdates)
@@ -215,8 +218,9 @@ const Profile = () => {
             throw error;
           }
         }
-      } catch (bioError) {
+      } catch (bioError: any) {
         console.error('Error updating with bio field:', bioError);
+        
         // Try without bio
         const { error } = await supabase
           .from('profiles')
