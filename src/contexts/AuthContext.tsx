@@ -22,6 +22,7 @@ export const AuthProvider = ({ children }: { children: React.ReactNode }) => {
   const { toast } = useToast();
 
   useEffect(() => {
+    // First set up the auth state change listener
     const {
       data: { subscription }
     } = supabase.auth.onAuthStateChange((_event, session) => {
@@ -29,11 +30,14 @@ export const AuthProvider = ({ children }: { children: React.ReactNode }) => {
       setUser(session?.user ?? null);
       setLoading(false);
     });
+
+    // Then check for existing session
     supabase.auth.getSession().then(({ data: { session } }) => {
       setSession(session);
       setUser(session?.user ?? null);
       setLoading(false);
     });
+
     return () => subscription.unsubscribe();
   }, []);
 
@@ -71,23 +75,20 @@ export const AuthProvider = ({ children }: { children: React.ReactNode }) => {
       // Get the current URL for redirection purposes
       const origin = window.location.origin;
       const redirectTo = `${origin}/chat`;
-
-      // Handle browser-specific issues with redirects
-      const isFirefox = navigator.userAgent.toLowerCase().indexOf('firefox') > -1;
-      const isSafari = /^((?!chrome|android).)*safari/i.test(navigator.userAgent);
       
-      // Log the redirect URL for debugging
       console.log(`OAuth redirect URL: ${redirectTo}`);
       
       const { data, error } = await supabase.auth.signInWithOAuth({
         provider,
         options: {
           redirectTo,
-          // For Google specific options
-          queryParams: provider === 'google' ? {
-            access_type: 'offline',
-            prompt: 'consent',
-          } : undefined
+          // Only include queryParams for Google
+          ...(provider === 'google' && {
+            queryParams: {
+              access_type: 'offline',
+              prompt: 'consent',
+            }
+          })
         }
       });
       

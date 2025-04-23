@@ -78,11 +78,13 @@ const Profile = () => {
             } else {
               console.error('Error fetching bio:', bioError);
             }
-          } else if (bioData && bioData.bio) {
-            setBio(bioData.bio);
+          } else if (bioData) {
+            // Check if bioData exists before trying to access its properties
+            setBio(bioData.bio || "");
           }
         } catch (bioError) {
           console.log('Bio field might not exist yet:', bioError);
+          setBio("");
         }
       }
     } catch (error) {
