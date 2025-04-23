@@ -6,7 +6,7 @@ import { useAuth } from './AuthContext';
 interface HistoryItem {
   id: string;
   query: string;
-  response?: string; // Added the response property as optional
+  response: string; // Now properly defined as required
   timestamp: Date;
 }
 
@@ -17,7 +17,7 @@ interface QueryStats {
 
 interface HistoryContextType {
   history: HistoryItem[];
-  addToHistory: (query: string) => void;
+  addToHistory: (query: string, response: string) => void;
   clearHistory: () => void;
   topQueries: QueryStats[];
   getMonthlyQueryCount: () => { month: string; count: number }[];
@@ -40,7 +40,8 @@ export function HistoryProvider({ children }: { children: ReactNode }) {
           // Convert string timestamps back to Date objects
           const formattedHistory = parsedHistory.map((item: any) => ({
             ...item,
-            timestamp: new Date(item.timestamp)
+            timestamp: new Date(item.timestamp),
+            response: item.response || "No response stored" // Handle potential missing response
           }));
           setHistory(formattedHistory);
         } catch (error) {
@@ -66,6 +67,7 @@ export function HistoryProvider({ children }: { children: ReactNode }) {
             const supabaseHistory = data.map((item: any) => ({
               id: item.id,
               query: item.query,
+              response: item.response || "No response stored", // Handle potential missing response
               timestamp: new Date(item.created_at)
             }));
             
@@ -90,13 +92,14 @@ export function HistoryProvider({ children }: { children: ReactNode }) {
     localStorage.setItem('assistant_history', JSON.stringify(history));
   }, [history]);
 
-  // Add a new query to history
-  const addToHistory = async (query: string) => {
+  // Add a new query and response to history
+  const addToHistory = async (query: string, response: string) => {
     if (!query.trim()) return; // Don't add empty queries
     
     const newItem: HistoryItem = {
       id: Date.now().toString(),
       query,
+      response, // Now storing response
       timestamp: new Date(),
     };
     
@@ -113,6 +116,7 @@ export function HistoryProvider({ children }: { children: ReactNode }) {
             id: newItem.id,
             user_id: user.id,
             query: newItem.query,
+            response: newItem.response, // Now storing response
             created_at: newItem.timestamp.toISOString()
           }]);
       } catch (error) {

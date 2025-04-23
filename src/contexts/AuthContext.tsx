@@ -1,6 +1,7 @@
 
 import React, { createContext, useContext, useState, useEffect } from "react";
 import { supabase } from "@/integrations/supabase/client";
+import { useToast } from "@/hooks/use-toast";
 
 type AuthContextType = {
   user: any;
@@ -9,6 +10,7 @@ type AuthContextType = {
   signIn: (email: string, password: string) => Promise<{ error?: any }>;
   signUp: (email: string, password: string) => Promise<{ error?: any }>;
   signOut: () => Promise<void>;
+  signInWithOAuth: (provider: 'google' | 'facebook') => Promise<{ error?: any }>;
 };
 
 const AuthContext = createContext<AuthContextType | undefined>(undefined);
@@ -17,6 +19,7 @@ export const AuthProvider = ({ children }: { children: React.ReactNode }) => {
   const [user, setUser] = useState<any>(null);
   const [session, setSession] = useState<any>(null);
   const [loading, setLoading] = useState(true);
+  const { toast } = useToast();
 
   useEffect(() => {
     // Listen to auth changes and sync session/user
@@ -64,8 +67,41 @@ export const AuthProvider = ({ children }: { children: React.ReactNode }) => {
     setLoading(false);
   };
 
+  // Add OAuth sign in method
+  const signInWithOAuth = async (provider: 'google' | 'facebook') => {
+    setLoading(true);
+    try {
+      const { error } = await supabase.auth.signInWithOAuth({ 
+        provider,
+        options: {
+          redirectTo: window.location.origin + '/chat'
+        }
+      });
+      
+      if (error) {
+        // Show toast with error message
+        toast({
+          title: "Authentication Error",
+          description: `${provider} login failed: ${error.message}`,
+          variant: "destructive"
+        });
+      }
+      
+      return { error };
+    } catch (err: any) {
+      toast({
+        title: "Authentication Error",
+        description: `${provider} login failed: ${err.message}`,
+        variant: "destructive"
+      });
+      return { error: err };
+    } finally {
+      setLoading(false);
+    }
+  };
+
   return (
-    <AuthContext.Provider value={{ user, session, loading, signIn, signUp, signOut }}>
+    <AuthContext.Provider value={{ user, session, loading, signIn, signUp, signOut, signInWithOAuth }}>
       {children}
     </AuthContext.Provider>
   );

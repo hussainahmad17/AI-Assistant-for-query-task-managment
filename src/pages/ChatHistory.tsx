@@ -6,7 +6,7 @@ import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/com
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { Button } from "@/components/ui/button";
 import { useToast } from "@/components/ui/use-toast";
-import { TrashIcon, Clock, DownloadIcon, Search } from "lucide-react";
+import { TrashIcon, Clock, DownloadIcon, Search, ChevronDown, ChevronUp } from "lucide-react";
 import { motion } from "framer-motion";
 import { Input } from "@/components/ui/input";
 
@@ -16,6 +16,7 @@ const ChatHistory = () => {
   const [searchQuery, setSearchQuery] = useState("");
   const [filteredHistory, setFilteredHistory] = useState(history);
   const [activeTab, setActiveTab] = useState("all");
+  const [expandedItems, setExpandedItems] = useState<Record<string, boolean>>({});
 
   useEffect(() => {
     document.title = "Chat History - Personal Assistant";
@@ -59,14 +60,31 @@ const ChatHistory = () => {
     });
   };
 
+  const toggleExpand = (id: string) => {
+    setExpandedItems(prev => ({
+      ...prev,
+      [id]: !prev[id]
+    }));
+  };
+
   const downloadHistory = () => {
-    const historyData = JSON.stringify(history, null, 2);
-    const blob = new Blob([historyData], { type: "application/json" });
+    // Create a plain text version for download
+    let textContent = "# Chat History Export\n\n";
+    
+    history.forEach((item, index) => {
+      const date = formatDate(item.timestamp);
+      textContent += `## Conversation ${index + 1} - ${date}\n\n`;
+      textContent += `User: ${item.query}\n\n`;
+      textContent += `Assistant: ${item.response || "No response recorded"}\n\n`;
+      textContent += "----------\n\n";
+    });
+    
+    const blob = new Blob([textContent], { type: "text/plain" });
     const url = URL.createObjectURL(blob);
     
     const a = document.createElement("a");
     a.href = url;
-    a.download = `chat-history-${new Date().toISOString().slice(0, 10)}.json`;
+    a.download = `chat-history-${new Date().toISOString().slice(0, 10)}.txt`;
     document.body.appendChild(a);
     a.click();
     document.body.removeChild(a);
@@ -74,7 +92,7 @@ const ChatHistory = () => {
     
     toast({
       title: "History downloaded",
-      description: "Your chat history has been downloaded as a JSON file.",
+      description: "Your chat history has been downloaded as a text file.",
     });
   };
 
@@ -104,7 +122,7 @@ const ChatHistory = () => {
                 variant="outline" 
                 onClick={downloadHistory}
                 className="flex items-center gap-2"
-                aria-label="Download chat history as JSON file"
+                aria-label="Download chat history as text file"
                 disabled={history.length === 0}
               >
                 <DownloadIcon className="h-4 w-4" aria-hidden="true" />
@@ -161,7 +179,7 @@ const ChatHistory = () => {
             ) : (
               <div className="grid gap-4">
                 {filteredHistory.map((item, index) => (
-                  <Card key={index}>
+                  <Card key={index} className="overflow-hidden">
                     <CardHeader className="pb-2">
                       <div className="flex justify-between items-start">
                         <div>
@@ -172,11 +190,28 @@ const ChatHistory = () => {
                             {formatDate(item.timestamp)}
                           </CardDescription>
                         </div>
+                        <Button 
+                          variant="ghost" 
+                          size="sm" 
+                          onClick={() => toggleExpand(item.id)}
+                          aria-label={expandedItems[item.id] ? "Collapse response" : "Expand response"}
+                        >
+                          {expandedItems[item.id] ? <ChevronUp className="h-4 w-4" /> : <ChevronDown className="h-4 w-4" />}
+                        </Button>
                       </div>
                     </CardHeader>
                     <CardContent>
-                      <div className="prose prose-sm max-h-24 overflow-hidden text-ellipsis">
-                        <p className="line-clamp-3">{item.response && item.response}</p>
+                      <div className={expandedItems[item.id] ? "" : "max-h-24 overflow-hidden"}>
+                        <div className="prose prose-sm">
+                          <p className={expandedItems[item.id] ? "" : "line-clamp-3"}>
+                            <strong>Question:</strong> {item.query}
+                          </p>
+                          {item.response && (
+                            <p className={`mt-2 ${expandedItems[item.id] ? "" : "line-clamp-3"}`}>
+                              <strong>Response:</strong> {item.response}
+                            </p>
+                          )}
+                        </div>
                       </div>
                     </CardContent>
                   </Card>

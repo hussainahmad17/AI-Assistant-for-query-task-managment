@@ -8,14 +8,13 @@ import { Label } from "@/components/ui/label";
 import { useToast } from "@/hooks/use-toast";
 import { Eye, EyeOff } from "lucide-react";
 import { useAuth } from "@/contexts/AuthContext";
-import { supabase } from "@/integrations/supabase/client";
 
 const Login = () => {
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
   const [showPassword, setShowPassword] = useState(false);
   const [errorMsg, setErrorMsg] = useState("");
-  const { signIn, loading } = useAuth();
+  const { signIn, signInWithOAuth, loading } = useAuth();
   const { toast } = useToast();
   const navigate = useNavigate();
 
@@ -42,11 +41,10 @@ const Login = () => {
 
   const handleSocial = async (provider: 'google' | 'facebook') => {
     setErrorMsg("");
-    try {
-      const { error } = await supabase.auth.signInWithOAuth({ provider });
-      if (error) setErrorMsg(error.message);
-    } catch (err: any) {
-      setErrorMsg("Unable to continue with selected provider.");
+    const { error } = await signInWithOAuth(provider);
+    
+    if (error) {
+      setErrorMsg(error.message);
     }
   };
 

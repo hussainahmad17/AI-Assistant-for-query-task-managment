@@ -15,6 +15,8 @@ import ChatHistory from "@/pages/ChatHistory";
 import NotFound from "@/pages/NotFound";
 import AuthLayout from "@/components/layouts/AuthLayout";
 import Dashboard from "@/pages/Dashboard";
+import Profile from "@/pages/Profile";
+import Help from "@/pages/Help";
 
 // Create routes configuration
 const routes = [
@@ -41,6 +43,14 @@ const routes = [
   {
     path: "/admin",
     element: <Admin />,
+  },
+  {
+    path: "/profile",
+    element: <Profile />,
+  },
+  {
+    path: "/help",
+    element: <Help />,
   },
   {
     path: "/auth",

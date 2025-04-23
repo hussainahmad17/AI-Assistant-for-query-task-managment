@@ -9,7 +9,6 @@ import { useToast } from "@/hooks/use-toast";
 import { useAuth } from "@/contexts/AuthContext";
 import { PasswordStrengthHint } from "@/components/auth/PasswordStrengthHint";
 import { Eye, EyeOff } from "lucide-react";
-import { supabase } from "@/integrations/supabase/client";
 
 const Register = () => {
   const [email, setEmail] = useState("");
@@ -18,7 +17,7 @@ const Register = () => {
   const [errorMsg, setErrorMsg] = useState("");
   const [loading, setLoading] = useState(false);
 
-  const { signUp } = useAuth();
+  const { signUp, signInWithOAuth } = useAuth();
   const { toast } = useToast();
   const navigate = useNavigate();
 
@@ -50,7 +49,7 @@ const Register = () => {
         });
         navigate("/chat");
       }
-    } catch (err) {
+    } catch (err: any) {
       setErrorMsg("Unexpected error. Please try again.");
       toast({
         title: "Registration failed",
@@ -66,14 +65,14 @@ const Register = () => {
   const handleSocial = async (provider: 'google' | 'facebook') => {
     setLoading(true);
     setErrorMsg("");
-    try {
-      const { error } = await supabase.auth.signInWithOAuth({ provider });
-      if (error) setErrorMsg(error.message);
-    } catch (err: any) {
-      setErrorMsg("Unable to continue with selected provider.");
-    } finally {
-      setLoading(false);
+    
+    const { error } = await signInWithOAuth(provider);
+    
+    if (error) {
+      setErrorMsg(error.message);
     }
+    
+    setLoading(false);
   };
 
   return (
