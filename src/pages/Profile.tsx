@@ -1,3 +1,4 @@
+
 import React, { useState, useEffect } from "react";
 import MainLayout from "@/components/layouts/MainLayout";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
@@ -37,27 +38,45 @@ const Profile = () => {
     
     try {
       setLoading(true);
-      const { data, error } = await supabase
+      
+      // First, check if 'bio' column exists in the profiles table
+      const { data: profileData, error: profileError } = await supabase
         .from('profiles')
-        .select('username, full_name, avatar_url, bio')
+        .select('username, full_name, avatar_url')
         .eq('id', user.id)
         .single();
       
-      if (error) {
-        console.error('Error fetching profile:', error);
-        if (error.message.includes("returned no results")) {
+      if (profileError) {
+        console.error('Error fetching profile:', profileError);
+        if (profileError.message.includes("returned no results")) {
           await createNewProfile();
           return;
         } else {
-          throw error;
+          throw profileError;
         }
       }
       
-      if (data) {
-        setUsername(data.username || '');
-        setFullName(data.full_name || '');
-        setAvatarUrl(data.avatar_url || '');
-        setBio(data.bio || '');
+      // If the profile exists, set the state values
+      if (profileData) {
+        setUsername(profileData.username || '');
+        setFullName(profileData.full_name || '');
+        setAvatarUrl(profileData.avatar_url || '');
+        
+        // Try to fetch bio separately to handle the case where bio column might not exist yet
+        try {
+          const { data: bioData } = await supabase
+            .from('profiles')
+            .select('bio')
+            .eq('id', user.id)
+            .single();
+          
+          if (bioData && bioData.bio) {
+            setBio(bioData.bio);
+          }
+        } catch (bioError) {
+          console.log('Bio field might not exist yet:', bioError);
+          // We'll continue without bio data
+        }
       }
     } catch (error) {
       console.error('Error fetching profile:', error);
@@ -84,11 +103,23 @@ const Profile = () => {
         updated_at: new Date().toISOString(),
       };
       
+      // First try without the bio field in case it doesn't exist
       const { error } = await supabase
         .from('profiles')
-        .insert(updates);
+        .insert({
+          id: updates.id,
+          username: updates.username,
+          full_name: updates.full_name,
+          avatar_url: updates.avatar_url,
+          updated_at: updates.updated_at
+        });
         
-      if (error) throw error;
+      if (error) {
+        // If there was an error and it's not related to 'bio', throw it
+        if (!error.message.includes("bio")) {
+          throw error;
+        }
+      }
       
       setUsername(updates.username);
     } catch (error) {
@@ -153,20 +184,47 @@ const Profile = () => {
     try {
       setLoading(true);
       
-      const updates = {
+      // First try updating without the bio field
+      const baseUpdates = {
         username,
         full_name: fullName,
         avatar_url: avatarUrl,
-        bio,
         updated_at: new Date().toISOString(),
       };
       
-      const { error } = await supabase
-        .from('profiles')
-        .update(updates)
-        .eq('id', user.id);
-        
-      if (error) throw error;
+      // Try to update with bio first
+      try {
+        const { error } = await supabase
+          .from('profiles')
+          .update({
+            ...baseUpdates,
+            bio
+          })
+          .eq('id', user.id);
+          
+        if (error) {
+          // If there's an error with bio field, try without it
+          if (error.message.includes("bio")) {
+            const { error: baseError } = await supabase
+              .from('profiles')
+              .update(baseUpdates)
+              .eq('id', user.id);
+              
+            if (baseError) throw baseError;
+          } else {
+            throw error;
+          }
+        }
+      } catch (bioError) {
+        console.error('Error updating with bio field:', bioError);
+        // Try without bio
+        const { error } = await supabase
+          .from('profiles')
+          .update(baseUpdates)
+          .eq('id', user.id);
+          
+        if (error) throw error;
+      }
       
       toast({
         title: "Success",

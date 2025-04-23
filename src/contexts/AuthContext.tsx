@@ -1,3 +1,4 @@
+
 import React, { createContext, useContext, useState, useEffect } from "react";
 import { supabase } from "@/integrations/supabase/client";
 import { useToast } from "@/hooks/use-toast";
@@ -67,18 +68,21 @@ export const AuthProvider = ({ children }: { children: React.ReactNode }) => {
   const signInWithOAuth = async (provider: 'google' | 'facebook') => {
     setLoading(true);
     try {
+      const origin = window.location.origin;
       const { error } = await supabase.auth.signInWithOAuth({
         provider,
         options: {
-          redirectTo: `${window.location.origin}/chat`,
+          redirectTo: `${origin}/chat`,
+          // For Google specific options
           queryParams: provider === 'google' ? {
             access_type: 'offline',
-            prompt: 'consent'
+            prompt: 'consent',
           } : undefined
         }
       });
       
       if (error) {
+        console.error(`OAuth Error: ${error.message}`);
         toast({
           title: "Authentication Error",
           description: `${provider} login failed: ${error.message}`,
@@ -88,6 +92,7 @@ export const AuthProvider = ({ children }: { children: React.ReactNode }) => {
       
       return { error };
     } catch (err: any) {
+      console.error(`OAuth Exception: ${err.message}`);
       toast({
         title: "Authentication Error",
         description: `${provider} login failed: ${err.message}`,

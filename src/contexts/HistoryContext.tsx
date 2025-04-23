@@ -1,3 +1,4 @@
+
 import React, { createContext, useContext, useState, useEffect, ReactNode } from 'react';
 import { supabase } from "@/integrations/supabase/client";
 import { useAuth } from './AuthContext';
@@ -52,9 +53,8 @@ export function HistoryProvider({ children }: { children: ReactNode }) {
       // Then load from Supabase if user is logged in
       if (user) {
         try {
-          // Use type assertion to bypass TypeScript's type checking
-          const { data, error } = await (supabase
-            .from('query_history') as any)
+          const { data, error } = await supabase
+            .from('query_history')
             .select('*')
             .eq('user_id', user.id)
             .order('created_at', { ascending: false });
