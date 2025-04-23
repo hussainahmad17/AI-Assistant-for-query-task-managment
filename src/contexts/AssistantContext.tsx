@@ -1,3 +1,4 @@
+
 import React, { createContext, useContext, useState, useEffect, ReactNode, useCallback } from "react";
 import { useToast } from "@/hooks/use-toast";
 import { loadGlobalSettings } from "@/utils/globalSettings";
@@ -37,137 +38,8 @@ export function AssistantProvider({ children }: { children: ReactNode }) {
   const { isSpeaking, speakMessage, stopSpeaking } = useAssistantSpeech(settings);
 
   const [inputToProcess, setInputToProcess] = useState<string | null>(null);
-  const recognitionFns = useAssistantRecognition(
-    (transcript) => setInputToProcess(transcript),
-    (error) => {
-      toast({
-        title: "Voice Input Error",
-        description: `Error: ${error}. Please try again later.`,
-        variant: 'destructive',
-      });
-      setIsProcessingVoice(false);
-    },
-    () => {
-      setIsProcessingVoice(false);
-    }
-  );
-  const isListening = recognitionFns.isListening;
-  const toggleListening = () => {
-    if (!window.SpeechRecognition && !window.webkitSpeechRecognition) {
-      toast({
-        title: 'Speech Recognition Unavailable',
-        description: 'Your browser does not support speech recognition. Try using Chrome or Edge.',
-        variant: 'destructive',
-      });
-      return;
-    }
-    if (isListening || isProcessingVoice) {
-      recognitionFns.stopListening();
-      setIsProcessingVoice(false);
-    } else {
-      setIsProcessingVoice(true);
-      recognitionFns.startListening();
-      toast({
-        title: 'Listening...',
-        description: "Speak now. I'm listening to your voice input.",
-        variant: 'default',
-      });
-    }
-  };
 
-  useEffect(() => {
-    if (inputToProcess) {
-      (async () => {
-        setIsProcessingVoice(true);
-        await addMessage(inputToProcess, "user");
-        await sendMessage(inputToProcess);
-        setInputToProcess(null);
-        setIsProcessingVoice(false);
-      })();
-    }
-  }, [inputToProcess, addMessage, sendMessage]);
-
-  useEffect(() => {
-    const loadConversationHistory = async () => {
-      localStorage.removeItem('conversation_history');
-      
-      if (user) {
-        try {
-          const { data, error } = await (supabase
-            .from('conversation_history') as any)
-            .select('*')
-            .eq('user_id', user.id)
-            .order('created_at', { ascending: true });
-          
-          if (error) throw error;
-          
-          if (data && data.length > 0) {
-            const supabaseMessages = data.map((item: any) => ({
-              id: item.id,
-              content: item.content,
-              role: item.role as 'user' | 'assistant',
-              timestamp: new Date(item.created_at)
-            }));
-            
-            setMessages(supabaseMessages);
-          }
-        } catch (error) {
-          console.error('Failed to fetch conversation history from Supabase', error);
-        }
-      }
-    };
-    
-    loadConversationHistory();
-  }, [user]);
-  
-  useEffect(() => {
-    const loadSettings = async () => {
-      try {
-        const savedApiKey = localStorage.getItem('gemini_api_key');
-        if (savedApiKey) {
-          setApiKey(savedApiKey);
-        }
-        
-        const dbSettings = await loadGlobalSettings();
-        if (dbSettings) {
-          setSettings(dbSettings);
-          if (dbSettings.apiKey && (!savedApiKey || dbSettings.apiKey !== savedApiKey)) {
-            setApiKey(dbSettings.apiKey);
-            localStorage.setItem('gemini_api_key', dbSettings.apiKey);
-          }
-        } else {
-          setSettings(defaultSettings);
-        }
-      } catch (error) {
-        console.error("Failed to load assistant settings:", error);
-        setSettings(defaultSettings);
-      }
-    };
-    
-    loadSettings();
-    
-    const handleSettingsUpdate = async () => {
-      const newSettings = await loadGlobalSettings();
-      if (newSettings) {
-        setSettings(newSettings);
-        if (newSettings.apiKey) {
-          setApiKey(newSettings.apiKey);
-          localStorage.setItem('gemini_api_key', newSettings.apiKey);
-        }
-      }
-    };
-    
-    window.addEventListener('settingsUpdate', handleSettingsUpdate);
-    return () => {
-      window.removeEventListener('settingsUpdate', handleSettingsUpdate);
-    };
-  }, []);
-
-  useEffect(() => {
-    if (apiKey) {
-      localStorage.setItem('gemini_api_key', apiKey);
-    }
-  }, [apiKey]);
+  // Define addMessage and sendMessage before using them in useEffect
 
   const addMessage = useCallback(
     async (content: string, role: 'user' | 'assistant') => {
@@ -307,6 +179,139 @@ export function AssistantProvider({ children }: { children: ReactNode }) {
     },
     [apiKey, messages, settings, addMessage, addToHistory, toast, retryCount]
   );
+
+  const recognitionFns = useAssistantRecognition(
+    (transcript) => setInputToProcess(transcript),
+    (error) => {
+      toast({
+        title: "Voice Input Error",
+        description: `Error: ${error}. Please try again later.`,
+        variant: 'destructive',
+      });
+      setIsProcessingVoice(false);
+    },
+    () => {
+      setIsProcessingVoice(false);
+    }
+  );
+  const isListening = recognitionFns.isListening;
+  const toggleListening = () => {
+    if (!window.SpeechRecognition && !window.webkitSpeechRecognition) {
+      toast({
+        title: 'Speech Recognition Unavailable',
+        description: 'Your browser does not support speech recognition. Try using Chrome or Edge.',
+        variant: 'destructive',
+      });
+      return;
+    }
+    if (isListening || isProcessingVoice) {
+      recognitionFns.stopListening();
+      setIsProcessingVoice(false);
+    } else {
+      setIsProcessingVoice(true);
+      recognitionFns.startListening();
+      toast({
+        title: 'Listening...',
+        description: "Speak now. I'm listening to your voice input.",
+        variant: 'default',
+      });
+    }
+  };
+
+  // Now that addMessage and sendMessage are defined, we can use them in the effect
+  useEffect(() => {
+    if (inputToProcess) {
+      (async () => {
+        setIsProcessingVoice(true);
+        await addMessage(inputToProcess, "user");
+        await sendMessage(inputToProcess);
+        setInputToProcess(null);
+        setIsProcessingVoice(false);
+      })();
+    }
+  }, [inputToProcess, addMessage, sendMessage]);
+
+  useEffect(() => {
+    const loadConversationHistory = async () => {
+      localStorage.removeItem('conversation_history');
+      
+      if (user) {
+        try {
+          const { data, error } = await (supabase
+            .from('conversation_history') as any)
+            .select('*')
+            .eq('user_id', user.id)
+            .order('created_at', { ascending: true });
+          
+          if (error) throw error;
+          
+          if (data && data.length > 0) {
+            const supabaseMessages = data.map((item: any) => ({
+              id: item.id,
+              content: item.content,
+              role: item.role as 'user' | 'assistant',
+              timestamp: new Date(item.created_at)
+            }));
+            
+            setMessages(supabaseMessages);
+          }
+        } catch (error) {
+          console.error('Failed to fetch conversation history from Supabase', error);
+        }
+      }
+    };
+    
+    loadConversationHistory();
+  }, [user]);
+  
+  useEffect(() => {
+    const loadSettings = async () => {
+      try {
+        const savedApiKey = localStorage.getItem('gemini_api_key');
+        if (savedApiKey) {
+          setApiKey(savedApiKey);
+        }
+        
+        const dbSettings = await loadGlobalSettings();
+        if (dbSettings) {
+          setSettings(dbSettings);
+          if (dbSettings.apiKey && (!savedApiKey || dbSettings.apiKey !== savedApiKey)) {
+            setApiKey(dbSettings.apiKey);
+            localStorage.setItem('gemini_api_key', dbSettings.apiKey);
+          }
+        } else {
+          setSettings(defaultSettings);
+        }
+      } catch (error) {
+        console.error("Failed to load assistant settings:", error);
+        setSettings(defaultSettings);
+      }
+    };
+    
+    loadSettings();
+    
+    const handleSettingsUpdate = async () => {
+      const newSettings = await loadGlobalSettings();
+      if (newSettings) {
+        setSettings(newSettings);
+        if (newSettings.apiKey) {
+          setApiKey(newSettings.apiKey);
+          localStorage.setItem('gemini_api_key', newSettings.apiKey);
+        }
+      }
+    };
+    
+    window.addEventListener('settingsUpdate', handleSettingsUpdate);
+    return () => {
+      window.removeEventListener('settingsUpdate', handleSettingsUpdate);
+    };
+  }, []);
+
+  useEffect(() => {
+    if (apiKey) {
+      localStorage.setItem('gemini_api_key', apiKey);
+    }
+  }, [apiKey]);
 
   const clearConversation = useCallback(async () => {
     setMessages([]);
