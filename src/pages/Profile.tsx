@@ -1,4 +1,3 @@
-
 import React, { useState, useEffect } from "react";
 import MainLayout from "@/components/layouts/MainLayout";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
@@ -46,7 +45,6 @@ const Profile = () => {
       
       if (error) {
         console.error('Error fetching profile:', error);
-        // Create a new profile if one doesn't exist
         if (error.message.includes("returned no results")) {
           await createNewProfile();
           return;
@@ -110,7 +108,6 @@ const Profile = () => {
       const fileName = `${user?.id}-${Math.random().toString(36).substring(2)}.${fileExt}`;
       const filePath = `avatars/${fileName}`;
       
-      // Upload the file to Supabase Storage
       const { error: uploadError } = await supabase
         .storage
         .from('avatars')
@@ -118,13 +115,11 @@ const Profile = () => {
         
       if (uploadError) throw uploadError;
       
-      // Get the public URL
       const { data } = supabase
         .storage
         .from('avatars')
         .getPublicUrl(filePath);
         
-      // Update the avatar URL in state and in the profiles table
       if (data) {
         setAvatarUrl(data.publicUrl);
         

@@ -1,4 +1,3 @@
-
 import React, { createContext, useContext, useState, useEffect, ReactNode } from 'react';
 import { supabase } from "@/integrations/supabase/client";
 import { useAuth } from './AuthContext';
@@ -94,62 +93,38 @@ export function HistoryProvider({ children }: { children: ReactNode }) {
 
   // Add a new query and response to history
   const addToHistory = async (query: string, response: string) => {
-    if (!query.trim()) return; // Don't add empty queries
+    if (!query.trim()) return;
     
     const newItem: HistoryItem = {
       id: Date.now().toString(),
       query,
-      response, // Now storing response
+      response,
       timestamp: new Date(),
     };
     
-    // Update local state for immediate UI update
     setHistory((prev) => [newItem, ...prev]);
     
-    // Save to Supabase if user is logged in
     if (user) {
       try {
-        // Use type assertion to bypass TypeScript's type checking
-        await (supabase
-          .from('query_history') as any)
+        await supabase
+          .from('query_history')
           .insert([{
             id: newItem.id,
             user_id: user.id,
             query: newItem.query,
-            response: newItem.response, // Now storing response
+            response: newItem.response,
             created_at: newItem.timestamp.toISOString()
           }]);
       } catch (error) {
         console.error('Failed to save query to Supabase', error);
       }
     }
-    
-    // Create a custom event to notify the dashboard components to update
-    const analyticsUpdateEvent = new CustomEvent('analyticsUpdate', { detail: newItem });
-    window.dispatchEvent(analyticsUpdateEvent);
   };
 
   // Clear all history
-  const clearHistory = async () => {
+  const clearHistory = () => {
     setHistory([]);
     localStorage.removeItem('assistant_history');
-    
-    // Clear from Supabase if user is logged in
-    if (user) {
-      try {
-        // Use type assertion to bypass TypeScript's type checking
-        await (supabase
-          .from('query_history') as any)
-          .delete()
-          .eq('user_id', user.id);
-      } catch (error) {
-        console.error('Failed to clear history from Supabase', error);
-      }
-    }
-    
-    // Create a clear event to reset dashboard components
-    const analyticsClearEvent = new CustomEvent('analyticsClear');
-    window.dispatchEvent(analyticsClearEvent);
   };
 
   // Get the top most frequent queries
