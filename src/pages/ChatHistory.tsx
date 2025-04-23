@@ -29,7 +29,7 @@ const ChatHistory = () => {
     if (searchQuery) {
       filtered = filtered.filter((item) => 
         item.query.toLowerCase().includes(searchQuery.toLowerCase()) || 
-        item.response.toLowerCase().includes(searchQuery.toLowerCase())
+        (item.response && item.response.toLowerCase().includes(searchQuery.toLowerCase()))
       );
     }
     
@@ -176,7 +176,7 @@ const ChatHistory = () => {
                     </CardHeader>
                     <CardContent>
                       <div className="prose prose-sm max-h-24 overflow-hidden text-ellipsis">
-                        <p className="line-clamp-3">{item.response}</p>
+                        <p className="line-clamp-3">{item.response && item.response}</p>
                       </div>
                     </CardContent>
                   </Card>

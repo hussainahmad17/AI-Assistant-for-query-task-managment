@@ -6,6 +6,7 @@ import { useAuth } from './AuthContext';
 interface HistoryItem {
   id: string;
   query: string;
+  response?: string; // Added the response property as optional
   timestamp: Date;
 }
 
