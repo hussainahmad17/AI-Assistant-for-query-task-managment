@@ -34,12 +34,9 @@ export function AssistantProvider({ children }: { children: ReactNode }) {
   const { addToHistory } = useHistory();
   const { user } = useAuth();
 
-  // SPEECH SYNTHESIS
   const { isSpeaking, speakMessage, stopSpeaking } = useAssistantSpeech(settings);
 
-  // SPEECH RECOGNITION
   const [inputToProcess, setInputToProcess] = useState<string | null>(null);
-  // onResult should only process a single transcript at a time!
   const recognitionFns = useAssistantRecognition(
     (transcript) => setInputToProcess(transcript),
     (error) => {
@@ -78,7 +75,6 @@ export function AssistantProvider({ children }: { children: ReactNode }) {
     }
   };
 
-  // Only process a transcript once per voice input session -- prevent double queries
   useEffect(() => {
     if (inputToProcess) {
       (async () => {
@@ -89,25 +85,20 @@ export function AssistantProvider({ children }: { children: ReactNode }) {
         setIsProcessingVoice(false);
       })();
     }
-    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [inputToProcess]);
 
-  // Load conversation history and settings logic (unchanged, extracted for brevity)
   useEffect(() => {
     const loadConversationHistory = async () => {
-      // Clear any existing conversation on page load to ensure fresh state
       localStorage.removeItem('conversation_history');
       
-      // If user is logged in, load conversation history from Supabase
       if (user) {
         try {
-          // Use type assertion to bypass TypeScript's type checking
           const { data, error } = await (supabase
             .from('conversation_history') as any)
             .select('*')
             .eq('user_id', user.id)
-            .order('created_at', { ascending: true }); // Order by created_at in ascending order
-            
+            .order('created_at', { ascending: true });
+          
           if (error) throw error;
           
           if (data && data.length > 0) {
@@ -132,17 +123,14 @@ export function AssistantProvider({ children }: { children: ReactNode }) {
   useEffect(() => {
     const loadSettings = async () => {
       try {
-        // First try to get API key from localStorage
         const savedApiKey = localStorage.getItem('gemini_api_key');
         if (savedApiKey) {
           setApiKey(savedApiKey);
         }
         
-        // Then try to get settings from database
         const dbSettings = await loadGlobalSettings();
         if (dbSettings) {
           setSettings(dbSettings);
-          // Only override apiKey from localStorage if the database has one and it's different
           if (dbSettings.apiKey && (!savedApiKey || dbSettings.apiKey !== savedApiKey)) {
             setApiKey(dbSettings.apiKey);
             localStorage.setItem('gemini_api_key', dbSettings.apiKey);
@@ -158,7 +146,6 @@ export function AssistantProvider({ children }: { children: ReactNode }) {
     
     loadSettings();
     
-    // Listen for settings updates
     const handleSettingsUpdate = async () => {
       const newSettings = await loadGlobalSettings();
       if (newSettings) {

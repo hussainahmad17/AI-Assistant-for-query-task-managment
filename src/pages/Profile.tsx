@@ -64,11 +64,12 @@ const Profile = () => {
     try {
       setLoading(true);
       
+      // Fix the type mismatch by converting Date to ISO string
       const updates = {
         username,
         full_name: fullName,
         avatar_url: avatarUrl,
-        updated_at: new Date(),
+        updated_at: new Date().toISOString(), // Convert Date to string
       };
       
       const { error } = await supabase
