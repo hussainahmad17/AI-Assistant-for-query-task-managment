@@ -1,15 +1,13 @@
 
 import { useEffect } from "react";
 import { motion } from "framer-motion";
-import DashboardLayout from "@/components/layouts/DashboardLayout";
+import MainLayout from "@/components/layouts/MainLayout";
 import { ChatWindow } from "@/components/assistant/ChatWindow";
 import { ChatInput } from "@/components/assistant/ChatInput";
 import { ApiKeyForm } from "@/components/assistant/ApiKeyForm";
 import { useAssistant } from "@/contexts/AssistantContext";
 import { Card } from "@/components/ui/card";
-import { BrainCircuit, History } from "lucide-react";
-import { Link } from "react-router-dom";
-import { Button } from "@/components/ui/button";
+import { BrainCircuit } from "lucide-react";
 
 const Chat = () => {
   const { apiKey, settings } = useAssistant();
@@ -19,32 +17,18 @@ const Chat = () => {
   }, [settings]);
 
   return (
-    <DashboardLayout>
+    <MainLayout>
       <motion.div
         initial={{ opacity: 0 }}
         animate={{ opacity: 1 }}
         className="max-w-4xl mx-auto"
+        id="main-content"
       >
-        <div className="flex items-center justify-between mb-6">
-          <div className="flex items-center gap-2">
-            <BrainCircuit className="h-8 w-8 text-primary" />
-            <h1 className="text-3xl font-bold">{settings?.assistantName || 'Personal Assistant'}</h1>
-          </div>
-          
-          <div className="flex items-center gap-2">
-            <Link to="/chat-history">
-              <Button variant="outline" size="sm" className="flex items-center gap-2">
-                <History className="h-4 w-4" />
-                Chat History
-              </Button>
-            </Link>
-            
-            {apiKey && (
-              <Link to="/admin" className="text-sm text-muted-foreground hover:text-foreground">
-                Settings
-              </Link>
-            )}
-          </div>
+        <div className="flex items-center gap-2 mb-6">
+          <BrainCircuit className="h-8 w-8 text-primary" aria-hidden="true" />
+          <h1 className="text-3xl font-bold tracking-tight">
+            {settings?.assistantName || 'Personal Assistant'}
+          </h1>
         </div>
         
         {!apiKey && (
@@ -52,6 +36,8 @@ const Chat = () => {
             initial={{ opacity: 0, y: 20 }}
             animate={{ opacity: 1, y: 0 }}
             className="mb-6"
+            role="region"
+            aria-label="API Key Form"
           >
             <ApiKeyForm />
           </motion.div>
@@ -59,7 +45,11 @@ const Chat = () => {
         
         {apiKey && (
           <>
-            <Card className="overflow-hidden border shadow-sm">
+            <Card 
+              className="overflow-hidden border shadow-sm"
+              role="region"
+              aria-label="Chat interface"
+            >
               <div className="h-[60vh] p-4 flex flex-col bg-gradient-to-b from-background to-muted/20">
                 <ChatWindow />
               </div>
@@ -74,7 +64,7 @@ const Chat = () => {
           </>
         )}
       </motion.div>
-    </DashboardLayout>
+    </MainLayout>
   );
 };
 

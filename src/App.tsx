@@ -70,13 +70,19 @@ const router = createBrowserRouter(routes);
 
 function App() {
   return (
-    <AuthProvider>
-      <HistoryProvider>
-        <AssistantProvider>
-          <RouterProvider router={router} />
-        </AssistantProvider>
-      </HistoryProvider>
-    </AuthProvider>
+    <>
+      {/* Skip to content link for keyboard users */}
+      <a href="#main-content" className="skip-link">
+        Skip to content
+      </a>
+      <AuthProvider>
+        <HistoryProvider>
+          <AssistantProvider>
+            <RouterProvider router={router} />
+          </AssistantProvider>
+        </HistoryProvider>
+      </AuthProvider>
+    </>
   );
 }
 

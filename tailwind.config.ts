@@ -1,4 +1,3 @@
-
 import type { Config } from "tailwindcss";
 
 export default {
@@ -129,6 +128,9 @@ export default {
         pulse: "pulse 1.5s cubic-bezier(0.4, 0, 0.6, 1) infinite",
         wave: "wave 2s linear infinite",
       },
+      fontSize: {
+        "2xs": "0.625rem",
+      }
     },
   },
   plugins: [require("tailwindcss-animate")],

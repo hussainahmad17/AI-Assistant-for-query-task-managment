@@ -1,4 +1,5 @@
-import { useEffect, useState } from "react";
+import React, { useEffect } from "react";
+import MainLayout from "@/components/layouts/MainLayout";
 import { motion } from "framer-motion";
 import DashboardLayout from "@/components/layouts/DashboardLayout";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
@@ -86,10 +87,11 @@ const Admin = () => {
   };
 
   return (
-    <DashboardLayout>
+    <MainLayout>
       <motion.div 
         initial={{ opacity: 0 }}
         animate={{ opacity: 1 }}
+        id="main-content"
       >
         <h1 className="text-3xl font-bold mb-6">Admin Panel</h1>
         
@@ -281,7 +283,7 @@ const Admin = () => {
           </TabsContent>
         </Tabs>
       </motion.div>
-    </DashboardLayout>
+    </MainLayout>
   );
 };
 
