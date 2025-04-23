@@ -178,9 +178,11 @@ export function AssistantProvider({ children }: { children: ReactNode }) {
         timestamp: new Date(),
       };
       setMessages((prev) => [...prev, newMessage]);
+      
       if (role === "assistant" && settings?.voiceEnabled) {
         speakMessage(content);
       }
+      
       if (user) {
         try {
           await (supabase.from('conversation_history') as any).insert([{
