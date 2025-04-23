@@ -10,7 +10,6 @@ type AuthContextType = {
   signIn: (email: string, password: string) => Promise<{ error?: any }>;
   signUp: (email: string, password: string) => Promise<{ error?: any }>;
   signOut: () => Promise<void>;
-  signInWithOAuth: (provider: 'google' | 'facebook') => Promise<{ error?: any }>;
 };
 
 const AuthContext = createContext<AuthContextType | undefined>(undefined);
@@ -69,54 +68,8 @@ export const AuthProvider = ({ children }: { children: React.ReactNode }) => {
     setLoading(false);
   };
 
-  const signInWithOAuth = async (provider: 'google' | 'facebook') => {
-    setLoading(true);
-    try {
-      // Get the current URL for redirection purposes
-      const origin = window.location.origin;
-      const redirectTo = `${origin}/chat`;
-      
-      console.log(`OAuth redirect URL: ${redirectTo}`);
-      
-      const { data, error } = await supabase.auth.signInWithOAuth({
-        provider,
-        options: {
-          redirectTo,
-          // Only include queryParams for Google
-          ...(provider === 'google' && {
-            queryParams: {
-              access_type: 'offline',
-              prompt: 'consent',
-            }
-          })
-        }
-      });
-      
-      if (error) {
-        console.error(`OAuth Error: ${error.message}`);
-        toast({
-          title: "Authentication Error",
-          description: `${provider} login failed: ${error.message}`,
-          variant: "destructive"
-        });
-      }
-      
-      return { error };
-    } catch (err: any) {
-      console.error(`OAuth Exception: ${err.message}`);
-      toast({
-        title: "Authentication Error",
-        description: `${provider} login failed: ${err.message}`,
-        variant: "destructive"
-      });
-      return { error: err };
-    } finally {
-      setLoading(false);
-    }
-  };
-
   return (
-    <AuthContext.Provider value={{ user, session, loading, signIn, signUp, signOut, signInWithOAuth }}>
+    <AuthContext.Provider value={{ user, session, loading, signIn, signUp, signOut }}>
       {children}
     </AuthContext.Provider>
   );
