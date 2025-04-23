@@ -67,19 +67,22 @@ export const AuthProvider = ({ children }: { children: React.ReactNode }) => {
     setLoading(false);
   };
 
-  // Add OAuth sign in method
+  // Updated OAuth sign in method with better redirect handling
   const signInWithOAuth = async (provider: 'google' | 'facebook') => {
     setLoading(true);
     try {
+      // Get the current URL's origin (e.g., http://localhost:5173)
+      const redirectTo = `${window.location.origin}/chat`;
+      
       const { error } = await supabase.auth.signInWithOAuth({ 
         provider,
         options: {
-          redirectTo: window.location.origin + '/chat'
+          redirectTo: redirectTo,
+          skipBrowserRedirect: false
         }
       });
       
       if (error) {
-        // Show toast with error message
         toast({
           title: "Authentication Error",
           description: `${provider} login failed: ${error.message}`,

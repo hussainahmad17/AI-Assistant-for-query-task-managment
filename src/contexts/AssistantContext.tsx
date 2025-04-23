@@ -85,7 +85,7 @@ export function AssistantProvider({ children }: { children: ReactNode }) {
         setIsProcessingVoice(false);
       })();
     }
-  }, [inputToProcess]);
+  }, [inputToProcess, addMessage, sendMessage]);
 
   useEffect(() => {
     const loadConversationHistory = async () => {
@@ -305,7 +305,7 @@ export function AssistantProvider({ children }: { children: ReactNode }) {
         setIsProcessing(false);
       }
     },
-    [apiKey, messages, settings, addMessage, addToHistory, toast]
+    [apiKey, messages, settings, addMessage, addToHistory, toast, retryCount]
   );
 
   const clearConversation = useCallback(async () => {
