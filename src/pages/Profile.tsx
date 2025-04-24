@@ -48,7 +48,7 @@ const Profile = () => {
       
       if (profileError) {
         console.error('Error fetching profile:', profileError);
-        if (profileError.message.includes("returned no results")) {
+        if (profileError.message && profileError.message.includes("returned no results")) {
           await createNewProfile();
           return;
         } else {
@@ -62,7 +62,7 @@ const Profile = () => {
         setFullName(profileData.full_name || '');
         setAvatarUrl(profileData.avatar_url || '');
         
-        // Try to fetch bio separately
+        // Try to fetch bio separately with proper error handling
         try {
           const { data: bioData, error: bioError } = await supabase
             .from('profiles')
@@ -72,14 +72,10 @@ const Profile = () => {
           
           if (bioError) {
             // Handle the specific error where bio column doesn't exist
-            if (bioError.message && bioError.message.includes("column 'bio' does not exist")) {
-              console.log("Bio column does not exist yet");
-              setBio("");
-            } else {
-              console.error('Error fetching bio:', bioError);
-            }
-          } else if (bioData) {
-            // Check if bioData exists before trying to access its properties
+            console.log("Bio field error:", bioError);
+            setBio("");
+          } else if (bioData && 'bio' in bioData) {
+            // Check if bioData exists and has bio property before accessing
             setBio(bioData.bio || "");
           }
         } catch (bioError) {
@@ -114,13 +110,7 @@ const Profile = () => {
       // Don't include bio field in case it doesn't exist
       const { error } = await supabase
         .from('profiles')
-        .insert({
-          id: updates.id,
-          username: updates.username,
-          full_name: updates.full_name,
-          avatar_url: updates.avatar_url,
-          updated_at: updates.updated_at
-        });
+        .insert(updates);
         
       if (error) {
         throw error;
@@ -144,6 +134,17 @@ const Profile = () => {
       const fileName = `${user?.id}-${Math.random().toString(36).substring(2)}.${fileExt}`;
       const filePath = `avatars/${fileName}`;
       
+      // Check if avatars bucket exists, create if not
+      const { data: buckets } = await supabase.storage.listBuckets();
+      const avatarBucketExists = buckets?.some(bucket => bucket.name === 'avatars');
+      
+      if (!avatarBucketExists) {
+        await supabase.storage.createBucket('avatars', {
+          public: true,
+          fileSizeLimit: 5242880 // 5MB
+        });
+      }
+      
       const { error: uploadError } = await supabase
         .storage
         .from('avatars')
@@ -159,10 +160,14 @@ const Profile = () => {
       if (data) {
         setAvatarUrl(data.publicUrl);
         
+        // Use upsert to handle both insert and update cases
         const { error: updateError } = await supabase
           .from('profiles')
-          .update({ avatar_url: data.publicUrl })
-          .eq('id', user?.id);
+          .upsert({ 
+            id: user?.id,
+            avatar_url: data.publicUrl,
+            updated_at: new Date().toISOString()
+          });
           
         if (updateError) throw updateError;
         
@@ -171,11 +176,11 @@ const Profile = () => {
           description: "Avatar uploaded successfully",
         });
       }
-    } catch (error) {
+    } catch (error: any) {
       console.error('Error uploading avatar:', error);
       toast({
         title: "Error",
-        description: "Failed to upload avatar",
+        description: error.message || "Failed to upload avatar",
         variant: "destructive",
       });
     } finally {
@@ -189,8 +194,9 @@ const Profile = () => {
     try {
       setLoading(true);
       
-      // First try updating without the bio field
+      // Base updates that should always work
       const baseUpdates = {
+        id: user.id,
         username,
         full_name: fullName,
         avatar_url: avatarUrl,
@@ -198,51 +204,37 @@ const Profile = () => {
       };
       
       try {
-        // Try with bio field
+        // Try with bio field using upsert to handle both insert and update
         const { error } = await supabase
           .from('profiles')
-          .update({
+          .upsert({
             ...baseUpdates,
             bio
-          })
-          .eq('id', user.id);
+          });
           
         if (error) {
-          // If there's an error with bio field, try without it
-          if (error.message && error.message.includes("bio")) {
-            const { error: baseError } = await supabase
-              .from('profiles')
-              .update(baseUpdates)
-              .eq('id', user.id);
-              
-            if (baseError) throw baseError;
-          } else {
-            throw error;
-          }
-        }
-      } catch (bioError: any) {
-        console.error('Error updating with bio field:', bioError);
-        
-        // Try without bio
-        const { error } = await supabase
-          .from('profiles')
-          .update(baseUpdates)
-          .eq('id', user.id);
+          console.error('Error updating with bio:', error);
           
-        if (error) throw error;
+          // If bio field causes an error, try without it
+          const { error: baseError } = await supabase
+            .from('profiles')
+            .upsert(baseUpdates);
+            
+          if (baseError) throw baseError;
+        }
+        
+        toast({
+          title: "Success",
+          description: "Your profile has been updated",
+        });
+      } catch (error: any) {
+        console.error('Error updating profile:', error);
+        toast({
+          title: "Error",
+          description: error.message || "Failed to update profile",
+          variant: "destructive",
+        });
       }
-      
-      toast({
-        title: "Success",
-        description: "Your profile has been updated",
-      });
-    } catch (error) {
-      console.error('Error updating profile:', error);
-      toast({
-        title: "Error",
-        description: "Failed to update profile",
-        variant: "destructive",
-      });
     } finally {
       setLoading(false);
     }
@@ -265,17 +257,17 @@ const Profile = () => {
         </div>
         
         <div className="grid gap-6 md:grid-cols-2">
-          <Card>
-            <CardHeader>
+          <Card className="border-primary/20 shadow-md">
+            <CardHeader className="bg-muted/30">
               <CardTitle>Profile Information</CardTitle>
               <CardDescription>Update your personal information</CardDescription>
             </CardHeader>
-            <CardContent className="space-y-6">
+            <CardContent className="space-y-6 pt-6">
               <div className="flex flex-col items-center sm:items-start sm:flex-row gap-4">
                 <div className="relative">
-                  <Avatar className="h-20 w-20">
+                  <Avatar className="h-24 w-24 ring-2 ring-primary/20 ring-offset-2">
                     <AvatarImage src={avatarUrl} alt={fullName || username} />
-                    <AvatarFallback className="text-lg bg-primary text-primary-foreground">{userInitial}</AvatarFallback>
+                    <AvatarFallback className="text-xl bg-primary text-primary-foreground">{userInitial}</AvatarFallback>
                   </Avatar>
                   <Button
                     size="icon"
@@ -310,6 +302,7 @@ const Profile = () => {
                     placeholder="Your username"
                     value={username}
                     onChange={(e) => setUsername(e.target.value)}
+                    className="focus-visible:ring-primary/50"
                   />
                 </div>
                 
@@ -320,6 +313,7 @@ const Profile = () => {
                     placeholder="Your full name"
                     value={fullName}
                     onChange={(e) => setFullName(e.target.value)}
+                    className="focus-visible:ring-primary/50"
                   />
                 </div>
                 
@@ -330,6 +324,7 @@ const Profile = () => {
                     placeholder="Tell us a bit about yourself"
                     value={bio}
                     onChange={(e) => setBio(e.target.value)}
+                    className="focus-visible:ring-primary/50"
                   />
                 </div>
                 
@@ -349,18 +344,19 @@ const Profile = () => {
             </CardContent>
           </Card>
           
-          <Card>
-            <CardHeader>
+          <Card className="border-primary/20 shadow-md">
+            <CardHeader className="bg-muted/30">
               <CardTitle>Account Security</CardTitle>
               <CardDescription>Manage your account security settings</CardDescription>
             </CardHeader>
-            <CardContent className="space-y-4">
+            <CardContent className="space-y-4 pt-6">
               <div className="space-y-2">
                 <Label>Email Address</Label>
                 <Input
                   value={user?.email || ""}
                   disabled
                   readOnly
+                  className="bg-muted/50"
                 />
                 <p className="text-xs text-muted-foreground">
                   Your account email address (cannot be changed)
@@ -369,7 +365,7 @@ const Profile = () => {
               
               <div className="space-y-2">
                 <Label>Account Provider</Label>
-                <div className="flex h-10 w-full items-center justify-between rounded-md border border-input bg-muted px-3 py-2 text-sm text-muted-foreground">
+                <div className="flex h-10 w-full items-center justify-between rounded-md border border-input bg-muted/50 px-3 py-2 text-sm text-muted-foreground">
                   <span>{user?.app_metadata?.provider || "Email"}</span>
                   <User className="h-4 w-4" />
                 </div>
@@ -380,7 +376,7 @@ const Profile = () => {
               
               <div className="space-y-2">
                 <Label>Account Created</Label>
-                <div className="flex h-10 w-full items-center rounded-md border border-input bg-muted px-3 py-2 text-sm text-muted-foreground">
+                <div className="flex h-10 w-full items-center rounded-md border border-input bg-muted/50 px-3 py-2 text-sm text-muted-foreground">
                   {user?.created_at ? new Date(user.created_at).toLocaleString() : "N/A"}
                 </div>
                 <p className="text-xs text-muted-foreground">

@@ -69,6 +69,18 @@ const ChatHistory = () => {
     }));
   };
 
+  const expandAll = () => {
+    const expanded: Record<string, boolean> = {};
+    filteredHistory.forEach(item => {
+      expanded[item.id] = true;
+    });
+    setExpandedItems(expanded);
+  };
+
+  const collapseAll = () => {
+    setExpandedItems({});
+  };
+
   const downloadHistory = () => {
     // Create a plain text version for download
     let textContent = "# Chat History Export\n\n";
@@ -124,7 +136,7 @@ const ChatHistory = () => {
               <Button 
                 variant="outline" 
                 onClick={downloadHistory}
-                className="flex items-center gap-2"
+                className="flex items-center gap-2 border-primary/30 hover:bg-primary/10"
                 aria-label="Download chat history as text file"
                 disabled={history.length === 0}
               >
@@ -152,20 +164,20 @@ const ChatHistory = () => {
                   value={searchQuery}
                   onChange={(e) => setSearchQuery(e.target.value)}
                   placeholder="Search chat history..."
-                  className="pl-9"
+                  className="pl-9 focus-visible:ring-primary/50"
                   aria-label="Search chat history"
                 />
               </div>
               
               <Tabs defaultValue="all" className="w-full md:w-auto" onValueChange={setActiveTab}>
-                <TabsList className={`grid ${isMobile ? 'grid-cols-2' : 'grid-cols-4'} md:w-[400px]`}>
+                <TabsList className={`grid ${isMobile ? 'grid-cols-2' : 'grid-cols-4'} md:w-[400px] bg-muted/50`}>
                   <TabsTrigger value="all">All</TabsTrigger>
                   <TabsTrigger value="today">Today</TabsTrigger>
                   {!isMobile && <TabsTrigger value="week">This Week</TabsTrigger>}
                   {!isMobile && <TabsTrigger value="month">This Month</TabsTrigger>}
                 </TabsList>
                 {isMobile && (
-                  <TabsList className="grid grid-cols-2 mt-2">
+                  <TabsList className="grid grid-cols-2 mt-2 bg-muted/50">
                     <TabsTrigger value="week">This Week</TabsTrigger>
                     <TabsTrigger value="month">This Month</TabsTrigger>
                   </TabsList>
@@ -173,8 +185,29 @@ const ChatHistory = () => {
               </Tabs>
             </div>
             
+            {filteredHistory.length > 0 && (
+              <div className="flex justify-end space-x-2">
+                <Button
+                  variant="outline"
+                  size="sm"
+                  onClick={expandAll}
+                  className="text-xs border-primary/30 hover:bg-primary/10"
+                >
+                  Expand All
+                </Button>
+                <Button
+                  variant="outline"
+                  size="sm"
+                  onClick={collapseAll}
+                  className="text-xs border-primary/30 hover:bg-primary/10"
+                >
+                  Collapse All
+                </Button>
+              </div>
+            )}
+            
             {filteredHistory.length === 0 ? (
-              <Card className="bg-muted/30">
+              <Card className="bg-muted/30 border-dashed border-2 border-muted">
                 <CardContent className="flex flex-col items-center justify-center pt-10 pb-10">
                   <Clock className="h-12 w-12 text-muted-foreground mb-4" aria-hidden="true" />
                   <h3 className="text-lg font-medium">No History Found</h3>
@@ -188,8 +221,11 @@ const ChatHistory = () => {
             ) : (
               <div className="grid gap-4">
                 {filteredHistory.map((item, index) => (
-                  <Card key={index} className="overflow-hidden">
-                    <CardHeader className="pb-2">
+                  <Card 
+                    key={item.id} 
+                    className={`overflow-hidden transition-all duration-200 border-primary/20 shadow-sm hover:shadow-md ${expandedItems[item.id] ? 'ring-1 ring-primary/30' : ''}`}
+                  >
+                    <CardHeader className={`pb-2 transition-colors ${expandedItems[item.id] ? 'bg-muted/40' : 'bg-transparent'}`}>
                       <div className="flex justify-between items-start">
                         <div className="flex-1 pr-2">
                           <CardTitle className="text-base font-medium line-clamp-1">
@@ -204,22 +240,28 @@ const ChatHistory = () => {
                           size="sm" 
                           onClick={() => toggleExpand(item.id)}
                           aria-label={expandedItems[item.id] ? "Collapse response" : "Expand response"}
+                          className="hover:bg-primary/10 rounded-full h-8 w-8 p-0"
                         >
                           {expandedItems[item.id] ? <ChevronUp className="h-4 w-4" /> : <ChevronDown className="h-4 w-4" />}
                         </Button>
                       </div>
                     </CardHeader>
                     <CardContent>
-                      <div className={expandedItems[item.id] ? "" : "max-h-24 overflow-hidden"}>
-                        <div className="prose prose-sm">
-                          <p className={expandedItems[item.id] ? "" : "line-clamp-3"}>
-                            <strong>Question:</strong> {item.query}
+                      <div className={`transition-all duration-300 ease-in-out ${expandedItems[item.id] ? "max-h-[1000px] opacity-100" : "max-h-24 overflow-hidden opacity-90"}`}>
+                        <div className="prose prose-sm dark:prose-invert">
+                          <p className={expandedItems[item.id] ? "" : "line-clamp-2"}>
+                            <strong className="text-primary">Question:</strong> {item.query}
                           </p>
-                          <p className={`mt-2 ${expandedItems[item.id] ? "" : "line-clamp-3"}`}>
-                            <strong>Response:</strong> {item.response || "No response stored"}
+                          <p className={`mt-2 ${expandedItems[item.id] ? "" : "line-clamp-2"}`}>
+                            <strong className="text-primary">Response:</strong> {item.response || "No response stored"}
                           </p>
                         </div>
                       </div>
+                      {!expandedItems[item.id] && item.response && item.response.length > 100 && (
+                        <div className="text-xs text-right mt-1 text-primary hover:underline cursor-pointer" onClick={() => toggleExpand(item.id)}>
+                          Show more
+                        </div>
+                      )}
                     </CardContent>
                   </Card>
                 ))}

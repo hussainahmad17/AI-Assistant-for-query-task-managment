@@ -70,12 +70,11 @@ export function HistoryProvider({ children }: { children: ReactNode }) {
               timestamp: new Date(item.created_at)
             }));
             
-            // Merge with local history and remove duplicates
-            const mergedHistory = [...supabaseHistory];
-            setHistory(mergedHistory);
+            // Use Supabase data as source of truth
+            setHistory(supabaseHistory);
             
             // Update localStorage with this merged history
-            localStorage.setItem('assistant_history', JSON.stringify(mergedHistory));
+            localStorage.setItem('assistant_history', JSON.stringify(supabaseHistory));
           }
         } catch (error) {
           console.error('Failed to fetch history from Supabase', error);
@@ -95,21 +94,54 @@ export function HistoryProvider({ children }: { children: ReactNode }) {
   const addToHistory = async (query: string, response: string) => {
     if (!query.trim()) return;
     
+    // Generate a consistent ID based on query content and timestamp
+    // This helps prevent duplicates when the same query is made
+    const now = new Date();
+    const newItemId = `${now.getTime()}-${query.substring(0, 10).replace(/\s/g, '')}`;
+    
     const newItem: HistoryItem = {
-      id: Date.now().toString(),
+      id: newItemId,
       query,
       response: response || "No response stored", // Ensure response is never undefined
-      timestamp: new Date(),
+      timestamp: now,
     };
+    
+    // Check if we already have this exact query/response pair recently added (within last 5 seconds)
+    // This prevents duplicate entries from real-time updates
+    const recentDuplicateExists = history.some(item => 
+      item.query === query && 
+      item.response === response &&
+      Math.abs(now.getTime() - new Date(item.timestamp).getTime()) < 5000
+    );
+    
+    if (recentDuplicateExists) {
+      console.log('Preventing duplicate history entry');
+      return;
+    }
     
     setHistory((prev) => [newItem, ...prev]);
     
     if (user) {
       try {
+        // First check if this entry already exists
+        const { data: existingData } = await supabase
+          .from('query_history')
+          .select('id')
+          .eq('user_id', user.id)
+          .eq('query', query)
+          .eq('response', response)
+          .limit(1);
+          
+        if (existingData && existingData.length > 0) {
+          console.log('Entry already exists in database, skipping insert');
+          return;
+        }
+        
+        // If no duplicate, proceed with insert
         await supabase
           .from('query_history')
           .insert([{
-            id: newItem.id,
+            id: newItemId,
             user_id: user.id,
             query: newItem.query,
             response: newItem.response,
@@ -122,9 +154,20 @@ export function HistoryProvider({ children }: { children: ReactNode }) {
   };
 
   // Clear all history
-  const clearHistory = () => {
+  const clearHistory = async () => {
     setHistory([]);
     localStorage.removeItem('assistant_history');
+    
+    if (user) {
+      try {
+        await supabase
+          .from('query_history')
+          .delete()
+          .eq('user_id', user.id);
+      } catch (error) {
+        console.error('Failed to clear history from Supabase', error);
+      }
+    }
   };
 
   // Get the top most frequent queries
