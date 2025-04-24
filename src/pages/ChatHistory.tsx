@@ -10,6 +10,7 @@ import { TrashIcon, Clock, DownloadIcon, Search, ChevronDown, ChevronUp } from "
 import { motion } from "framer-motion";
 import { Input } from "@/components/ui/input";
 import { useIsMobile } from "@/hooks/use-mobile";
+import ReactMarkdown from 'react-markdown';
 
 const ChatHistory = () => {
   const { history, clearHistory } = useHistory();
@@ -51,7 +52,17 @@ const ChatHistory = () => {
       filtered = filtered.filter(item => new Date(item.timestamp) >= monthAgo);
     }
     
-    setFilteredHistory(filtered);
+    // Remove potential duplicates based on timestamp and query
+    const uniqueItems = new Map();
+    filtered.forEach(item => {
+      const key = `${item.query}-${new Date(item.timestamp).getTime()}`;
+      if (!uniqueItems.has(key) || 
+         (item.response !== "No response stored" && uniqueItems.get(key).response === "No response stored")) {
+        uniqueItems.set(key, item);
+      }
+    });
+    
+    setFilteredHistory(Array.from(uniqueItems.values()));
   }, [history, searchQuery, activeTab]);
 
   const handleClearHistory = () => {
@@ -113,6 +124,11 @@ const ChatHistory = () => {
   const formatDate = (dateString: string | Date) => {
     const date = new Date(dateString);
     return date.toLocaleString();
+  };
+
+  // Clean up markdown formatting for display
+  const cleanupMarkdown = (text: string) => {
+    return text.replace(/\*\*/g, '');
   };
 
   return (
@@ -220,7 +236,7 @@ const ChatHistory = () => {
               </Card>
             ) : (
               <div className="grid gap-4">
-                {filteredHistory.map((item, index) => (
+                {filteredHistory.map((item) => (
                   <Card 
                     key={item.id} 
                     className={`overflow-hidden transition-all duration-200 border-primary/20 shadow-sm hover:shadow-md ${expandedItems[item.id] ? 'ring-1 ring-primary/30' : ''}`}
@@ -252,9 +268,14 @@ const ChatHistory = () => {
                           <p className={expandedItems[item.id] ? "" : "line-clamp-2"}>
                             <strong className="text-primary">Question:</strong> {item.query}
                           </p>
-                          <p className={`mt-2 ${expandedItems[item.id] ? "" : "line-clamp-2"}`}>
-                            <strong className="text-primary">Response:</strong> {item.response || "No response stored"}
-                          </p>
+                          <div className={`mt-2 ${expandedItems[item.id] ? "" : "line-clamp-2"}`}>
+                            <strong className="text-primary">Response:</strong>{" "}
+                            {item.response && item.response !== "No response stored" ? (
+                              <span>{cleanupMarkdown(item.response)}</span>
+                            ) : (
+                              <span>No response stored</span>
+                            )}
+                          </div>
                         </div>
                       </div>
                       {!expandedItems[item.id] && item.response && item.response.length > 100 && (

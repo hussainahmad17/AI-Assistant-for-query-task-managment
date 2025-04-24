@@ -1,4 +1,3 @@
-
 import React, { createContext, useContext, useState, useEffect, ReactNode } from 'react';
 import { supabase } from "@/integrations/supabase/client";
 import { useAuth } from './AuthContext';
@@ -62,13 +61,27 @@ export function HistoryProvider({ children }: { children: ReactNode }) {
           if (error) throw error;
           
           if (data && data.length > 0) {
-            // Convert the Supabase data to our HistoryItem format
-            const supabaseHistory = data.map((item: any) => ({
-              id: item.id,
-              query: item.query,
-              response: item.response || "No response stored", // Handle potential missing response
-              timestamp: new Date(item.created_at)
-            }));
+            // Filter out duplicate entries that might cause the double history issue
+            const uniqueEntries = new Map();
+            
+            // Process the entries and keep only the most complete ones
+            data.forEach((item: any) => {
+              const key = `${item.query}-${item.id}`;
+              
+              // If we haven't seen this entry before, or if this one has a response and the previous one didn't
+              if (!uniqueEntries.has(key) || 
+                 (item.response && uniqueEntries.get(key).response === "No response stored")) {
+                uniqueEntries.set(key, {
+                  id: item.id,
+                  query: item.query,
+                  response: item.response || "No response stored",
+                  timestamp: new Date(item.created_at)
+                });
+              }
+            });
+            
+            // Convert to array
+            const supabaseHistory = Array.from(uniqueEntries.values());
             
             // Use Supabase data as source of truth
             setHistory(supabaseHistory);
@@ -94,36 +107,38 @@ export function HistoryProvider({ children }: { children: ReactNode }) {
   const addToHistory = async (query: string, response: string) => {
     if (!query.trim()) return;
     
+    // Process the response to remove Markdown asterisks
+    const cleanedResponse = response.replace(/\*\*/g, ''); // Remove double asterisks
+    
     // Generate a consistent ID based on query content and timestamp
-    // This helps prevent duplicates when the same query is made
     const now = new Date();
     const newItemId = `${now.getTime()}-${query.substring(0, 10).replace(/\s/g, '')}`;
     
     const newItem: HistoryItem = {
       id: newItemId,
       query,
-      response: response || "No response stored", // Ensure response is never undefined
+      response: cleanedResponse || "No response stored",
       timestamp: now,
     };
     
-    // Check if we already have this exact query/response pair recently added (within last 5 seconds)
-    // This prevents duplicate entries from real-time updates
-    const recentDuplicateExists = history.some(item => 
+    // Skip if this is a duplicate of an existing item in history
+    const duplicateExists = history.some(item => 
       item.query === query && 
-      item.response === response &&
-      Math.abs(now.getTime() - item.timestamp.getTime()) < 5000
+      Math.abs(now.getTime() - item.timestamp.getTime()) < 10000 // Within 10 seconds
     );
     
-    if (recentDuplicateExists) {
+    if (duplicateExists) {
       console.log('Preventing duplicate history entry');
       return;
     }
     
+    // Update local state
     setHistory((prev) => [newItem, ...prev]);
     
+    // Update database if user is logged in
     if (user) {
       try {
-        // First check if this entry already exists
+        // First check if the exact entry already exists (prevents duplicates)
         const { data: existingData } = await supabase
           .from('query_history')
           .select('id')
@@ -142,8 +157,8 @@ export function HistoryProvider({ children }: { children: ReactNode }) {
           .insert([{
             id: newItemId,
             user_id: user.id,
-            query: newItem.query,
-            response: newItem.response,
+            query: query,
+            response: cleanedResponse,
             created_at: newItem.timestamp.toISOString()
           }]);
       } catch (error) {

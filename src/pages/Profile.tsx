@@ -1,3 +1,4 @@
+
 import React, { useState, useEffect } from "react";
 import MainLayout from "@/components/layouts/MainLayout";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
@@ -59,25 +60,29 @@ const Profile = () => {
       if (profileData) {
         setUsername(profileData.username || '');
         setFullName(profileData.full_name || '');
-        if (typeof profileData.avatar_url === 'string') {
+        if (profileData.avatar_url) {
           setAvatarUrl(profileData.avatar_url);
         }
         
-        // Try to fetch bio separately with proper error handling
+        // Try to fetch bio separately
         try {
-          const { data: bioData, error: bioError } = await supabase
+          // Check if bio column exists first
+          const { data: columnsData } = await supabase
             .from('profiles')
             .select('bio')
-            .eq('id', user.id)
-            .single();
+            .limit(0);
           
-          if (bioError) {
-            // Handle the specific error where bio column doesn't exist
-            console.log("Bio field error:", bioError);
-            setBio("");
-          } else if (bioData && typeof bioData.bio === 'string') {
-            // Fixed: Check if bioData exists and bio is a string before setting
-            setBio(bioData.bio);
+          // If bio column exists, fetch the user's bio
+          if (columnsData !== null) {
+            const { data: userBioData } = await supabase
+              .from('profiles')
+              .select('bio')
+              .eq('id', user.id)
+              .single();
+            
+            if (userBioData && typeof userBioData.bio === 'string') {
+              setBio(userBioData.bio);
+            }
           }
         } catch (bioError) {
           console.log('Bio field might not exist yet:', bioError);
@@ -158,17 +163,17 @@ const Profile = () => {
         .from('avatars')
         .getPublicUrl(filePath);
         
-      if (data) {
+      if (data && data.publicUrl) {
         setAvatarUrl(data.publicUrl);
         
-        // Use upsert to handle both insert and update cases
+        // Update profile with new avatar URL
         const { error: updateError } = await supabase
           .from('profiles')
-          .upsert({ 
-            id: user?.id,
+          .update({ 
             avatar_url: data.publicUrl,
             updated_at: new Date().toISOString()
-          });
+          })
+          .eq('id', user?.id);
           
         if (updateError) throw updateError;
         
@@ -195,47 +200,47 @@ const Profile = () => {
     try {
       setLoading(true);
       
-      // Base updates that should always work
+      // Base updates without bio
       const baseUpdates = {
-        id: user.id,
         username,
         full_name: fullName,
         avatar_url: avatarUrl,
         updated_at: new Date().toISOString(),
       };
       
-      try {
-        // Try with bio field using upsert to handle both insert and update
-        const { error } = await supabase
+      // First try updating with bio included
+      const { error } = await supabase
+        .from('profiles')
+        .update({
+          ...baseUpdates,
+          bio
+        })
+        .eq('id', user.id);
+      
+      // If there's an error and it's about the bio column, try without bio
+      if (error && error.message && error.message.includes('bio')) {
+        console.log('Updating without bio field');
+        const { error: baseError } = await supabase
           .from('profiles')
-          .upsert({
-            ...baseUpdates,
-            bio
-          });
+          .update(baseUpdates)
+          .eq('id', user.id);
           
-        if (error) {
-          console.error('Error updating with bio:', error);
-          
-          // If bio field causes an error, try without it
-          const { error: baseError } = await supabase
-            .from('profiles')
-            .upsert(baseUpdates);
-            
-          if (baseError) throw baseError;
-        }
-        
-        toast({
-          title: "Success",
-          description: "Your profile has been updated",
-        });
-      } catch (error: any) {
-        console.error('Error updating profile:', error);
-        toast({
-          title: "Error",
-          description: error.message || "Failed to update profile",
-          variant: "destructive",
-        });
+        if (baseError) throw baseError;
+      } else if (error) {
+        throw error;
       }
+      
+      toast({
+        title: "Success",
+        description: "Your profile has been updated",
+      });
+    } catch (error: any) {
+      console.error('Error updating profile:', error);
+      toast({
+        title: "Error",
+        description: error.message || "Failed to update profile",
+        variant: "destructive",
+      });
     } finally {
       setLoading(false);
     }
