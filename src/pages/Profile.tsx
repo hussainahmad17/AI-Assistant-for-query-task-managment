@@ -1,4 +1,3 @@
-
 import React, { useState, useEffect } from "react";
 import MainLayout from "@/components/layouts/MainLayout";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
@@ -60,7 +59,9 @@ const Profile = () => {
       if (profileData) {
         setUsername(profileData.username || '');
         setFullName(profileData.full_name || '');
-        setAvatarUrl(profileData.avatar_url || '');
+        if (typeof profileData.avatar_url === 'string') {
+          setAvatarUrl(profileData.avatar_url);
+        }
         
         // Try to fetch bio separately with proper error handling
         try {
@@ -74,9 +75,9 @@ const Profile = () => {
             // Handle the specific error where bio column doesn't exist
             console.log("Bio field error:", bioError);
             setBio("");
-          } else if (bioData && 'bio' in bioData) {
-            // Check if bioData exists and has bio property before accessing
-            setBio(bioData.bio || "");
+          } else if (bioData && typeof bioData.bio === 'string') {
+            // Fixed: Check if bioData exists and bio is a string before setting
+            setBio(bioData.bio);
           }
         } catch (bioError) {
           console.log('Bio field might not exist yet:', bioError);

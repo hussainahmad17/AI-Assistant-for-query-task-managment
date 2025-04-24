@@ -111,7 +111,7 @@ export function HistoryProvider({ children }: { children: ReactNode }) {
     const recentDuplicateExists = history.some(item => 
       item.query === query && 
       item.response === response &&
-      Math.abs(now.getTime() - new Date(item.timestamp).getTime()) < 5000
+      Math.abs(now.getTime() - item.timestamp.getTime()) < 5000
     );
     
     if (recentDuplicateExists) {
@@ -129,7 +129,6 @@ export function HistoryProvider({ children }: { children: ReactNode }) {
           .select('id')
           .eq('user_id', user.id)
           .eq('query', query)
-          .eq('response', response)
           .limit(1);
           
         if (existingData && existingData.length > 0) {
@@ -180,8 +179,12 @@ export function HistoryProvider({ children }: { children: ReactNode }) {
       queryCounts[queryLower] = (queryCounts[queryLower] || 0) + 1;
     });
     
+    // Fixed the excessively deep instantiation error by explicitly typing the return value
     return Object.entries(queryCounts)
-      .map(([query, count]) => ({ query, count }))
+      .map((entry): QueryStats => ({ 
+        query: entry[0], 
+        count: entry[1] 
+      }))
       .sort((a, b) => b.count - a.count)
       .slice(0, 10);
   }, [history]);
