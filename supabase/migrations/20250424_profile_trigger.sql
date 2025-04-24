@@ -9,7 +9,7 @@ BEGIN
   INSERT INTO public.profiles (id, username, full_name, avatar_url, bio)
   VALUES (
     NEW.id,
-    SPLIT_PART(NEW.email, '@', 1),
+    COALESCE(SPLIT_PART(NEW.email, '@', 1), ''),
     '',
     '',
     ''
@@ -48,6 +48,12 @@ CREATE POLICY IF NOT EXISTS "Users can update their own profiles"
 ON public.profiles
 FOR UPDATE
 USING (auth.uid() = id);
+
+-- Create policy to allow users to upsert their own profile
+CREATE POLICY IF NOT EXISTS "Users can upsert their own profiles"
+ON public.profiles
+FOR INSERT
+WITH CHECK (auth.uid() = id);
 
 -- Ensure required RLS is set on storage objects for avatar uploads
 CREATE POLICY IF NOT EXISTS "Allow public avatar access"

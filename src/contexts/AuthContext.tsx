@@ -26,14 +26,23 @@ export const AuthProvider = ({ children }: { children: React.ReactNode }) => {
 
   // Function to refresh the session data
   const refreshSession = async () => {
+    console.log("Refreshing session");
     try {
-      const { data } = await supabase.auth.refreshSession();
+      const { data, error } = await supabase.auth.refreshSession();
+      if (error) throw error;
+      
       const { session: refreshedSession } = data;
       if (refreshedSession) {
         setSession(refreshedSession);
         setUser(refreshedSession.user);
         // Check email verification status
         setEmailVerified(refreshedSession.user?.email_confirmed_at != null);
+        console.log("Session refreshed, email verified:", refreshedSession.user?.email_confirmed_at != null);
+      } else {
+        console.log("No session found during refresh");
+        setSession(null);
+        setUser(null);
+        setEmailVerified(false);
       }
     } catch (error) {
       console.error("Error refreshing session:", error);
@@ -41,61 +50,102 @@ export const AuthProvider = ({ children }: { children: React.ReactNode }) => {
   };
 
   useEffect(() => {
+    console.log("Auth context initializing");
+    
     // First set up the auth state change listener
     const {
       data: { subscription }
-    } = supabase.auth.onAuthStateChange(async (_event, session) => {
-      setSession(session);
-      setUser(session?.user ?? null);
+    } = supabase.auth.onAuthStateChange(async (_event, newSession) => {
+      console.log("Auth state changed, event:", _event);
+      
+      setSession(newSession);
+      setUser(newSession?.user ?? null);
+      
       // Check email verification status when session changes
-      setEmailVerified(session?.user?.email_confirmed_at != null);
+      const isVerified = newSession?.user?.email_confirmed_at != null;
+      setEmailVerified(isVerified);
+      console.log("Email verified:", isVerified);
+      
       setLoading(false);
     });
 
     // Then check for existing session
-    supabase.auth.getSession().then(({ data: { session } }) => {
-      setSession(session);
-      setUser(session?.user ?? null);
-      // Check email verification status on initial load
-      setEmailVerified(session?.user?.email_confirmed_at != null);
-      setLoading(false);
-    });
+    const checkExistingSession = async () => {
+      try {
+        const { data: { session: existingSession }, error } = await supabase.auth.getSession();
+        
+        if (error) throw error;
+        
+        if (existingSession) {
+          console.log("Existing session found");
+          setSession(existingSession);
+          setUser(existingSession.user);
+          
+          // Check email verification status on initial load
+          const isVerified = existingSession.user?.email_confirmed_at != null;
+          setEmailVerified(isVerified);
+          console.log("Email verified:", isVerified);
+        } else {
+          console.log("No existing session found");
+        }
+      } catch (error) {
+        console.error("Error checking existing session:", error);
+      } finally {
+        setLoading(false);
+      }
+    };
+    
+    checkExistingSession();
 
-    return () => subscription.unsubscribe();
+    return () => {
+      console.log("Unsubscribing from auth state changes");
+      subscription.unsubscribe();
+    };
   }, []);
 
   const signIn = async (email: string, password: string) => {
+    console.log("Signing in user:", email);
     setLoading(true);
+    
     try {
       const { error, data } = await supabase.auth.signInWithPassword({
         email,
         password
       });
       
-      if (!error) {
-        // Check if email is verified
-        const isVerified = data.user?.email_confirmed_at != null;
-        setEmailVerified(isVerified);
-        
-        if (isVerified) {
-          toast({
-            title: "Welcome back!",
-            description: "You have successfully signed in.",
-          });
-        } else {
-          toast({
-            title: "Email verification required",
-            description: "Please verify your email before signing in.",
-            variant: "destructive",
-          });
-          // Sign out if email is not verified
-          await supabase.auth.signOut();
-          setUser(null);
-          setSession(null);
-        }
+      if (error) {
+        console.error("Sign in error:", error);
+        return { error };
       }
       
-      return { error };
+      // Check if email is verified
+      const isVerified = data.user?.email_confirmed_at != null;
+      setEmailVerified(isVerified);
+      console.log("Sign in successful, email verified:", isVerified);
+      
+      if (isVerified) {
+        toast({
+          title: "Welcome back!",
+          description: "You have successfully signed in.",
+        });
+        
+        // Force refresh the session
+        await refreshSession();
+      } else {
+        toast({
+          title: "Email verification required",
+          description: "Please verify your email before signing in.",
+          variant: "destructive",
+        });
+        
+        // Sign out if email is not verified
+        await supabase.auth.signOut();
+        setUser(null);
+        setSession(null);
+        setEmailVerified(false);
+      }
+      
+      return { error: isVerified ? null : new Error("Email verification required") };
     } catch (error) {
       console.error("Sign in error:", error);
       return { error };
@@ -105,7 +155,9 @@ export const AuthProvider = ({ children }: { children: React.ReactNode }) => {
   };
 
   const signUp = async (email: string, password: string) => {
+    console.log("Signing up user:", email);
     setLoading(true);
+    
     try {
       const { error } = await supabase.auth.signUp({
         email,
@@ -115,14 +167,18 @@ export const AuthProvider = ({ children }: { children: React.ReactNode }) => {
         }
       });
       
-      if (!error) {
-        toast({
-          title: "Verification email sent",
-          description: "Please check your email to verify your account before signing in.",
-        });
+      if (error) {
+        console.error("Sign up error:", error);
+        return { error };
       }
       
-      return { error };
+      console.log("Sign up successful, verification email sent");
+      toast({
+        title: "Verification email sent",
+        description: "Please check your email to verify your account before signing in.",
+      });
+      
+      return { error: null };
     } catch (error) {
       console.error("Sign up error:", error);
       return { error };
@@ -132,12 +188,18 @@ export const AuthProvider = ({ children }: { children: React.ReactNode }) => {
   };
 
   const signOut = async () => {
+    console.log("Signing out user");
     setLoading(true);
+    
     try {
+      // First clear local storage to prevent potential data leaks
+      localStorage.removeItem('assistant_history');
+      
       await supabase.auth.signOut();
       setUser(null);
       setSession(null);
       setEmailVerified(false);
+      
       toast({
         title: "Signed out",
         description: "You have been signed out successfully.",

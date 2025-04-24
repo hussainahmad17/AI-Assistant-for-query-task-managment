@@ -1,4 +1,3 @@
-
 import React, { useState, useEffect } from "react";
 import MainLayout from "@/components/layouts/MainLayout";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
@@ -14,7 +13,7 @@ import { Loader2, User, Camera } from "lucide-react";
 import { useIsMobile } from "@/hooks/use-mobile";
 
 const Profile = () => {
-  const { user } = useAuth();
+  const { user, refreshSession } = useAuth();
   const { toast } = useToast();
   const isMobile = useIsMobile();
   const [loading, setLoading] = useState(false);
@@ -51,7 +50,7 @@ const Profile = () => {
       if (error) {
         console.error("Profile fetch error:", error);
         // If profile doesn't exist, create a new one
-        if (error.message && error.message.includes("returned no results")) {
+        if (error.code === 'PGRST116') {
           await createNewProfile();
           return;
         } else {
@@ -71,9 +70,7 @@ const Profile = () => {
           setAvatarUrl(data.avatar_url);
         }
         
-        if (data.bio !== null) {
-          setBio(data.bio || '');
-        }
+        setBio(data.bio || '');
       }
     } catch (error) {
       console.error('Error fetching profile:', error);
@@ -209,6 +206,7 @@ const Profile = () => {
       setLoading(true);
       
       const updates = {
+        id: user.id,
         username,
         full_name: fullName,
         avatar_url: avatarUrl,
@@ -218,15 +216,21 @@ const Profile = () => {
       
       console.log("Updating profile with:", updates);
       
+      // Use upsert to handle both insert and update cases
       const { error } = await supabase
         .from('profiles')
-        .update(updates)
-        .eq('id', user.id);
+        .upsert(updates, { 
+          onConflict: 'id',
+          ignoreDuplicates: false 
+        });
       
       if (error) {
         console.error("Profile update error:", error);
         throw error;
       }
+      
+      // Refresh session to ensure user data is up-to-date
+      await refreshSession();
       
       toast({
         title: "Success",

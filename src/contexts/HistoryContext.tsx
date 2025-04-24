@@ -1,3 +1,4 @@
+
 import React, { createContext, useContext, useState, useEffect, ReactNode } from 'react';
 import { supabase } from "@/integrations/supabase/client";
 import { useAuth } from './AuthContext';
@@ -28,32 +29,16 @@ export function HistoryProvider({ children }: { children: ReactNode }) {
   const [history, setHistory] = useState<HistoryItem[]>([]);
   const { user } = useAuth();
   
-  // Load history from both localStorage and Supabase on mount or when user changes
+  // Load history from Supabase or localStorage when user changes
   useEffect(() => {
     const loadHistory = async () => {
-      // First load from localStorage for immediate display
-      const savedHistory = localStorage.getItem('assistant_history');
-      if (savedHistory) {
-        try {
-          const parsedHistory = JSON.parse(savedHistory);
-          // Convert string timestamps back to Date objects
-          const formattedHistory = parsedHistory.map((item: any) => ({
-            ...item,
-            timestamp: new Date(item.timestamp),
-            response: item.response || "No response stored" // Handle potential missing response
-          }));
-          
-          // Remove duplicates from localStorage
-          const uniqueItems = removeDuplicates(formattedHistory);
-          setHistory(uniqueItems);
-        } catch (error) {
-          console.error('Failed to parse history from localStorage', error);
-          setHistory([]);
-        }
-      }
+      console.log("Loading history for user:", user?.id || "none");
       
-      // Then load from Supabase if user is logged in
       if (user) {
+        // Clear existing history first to avoid mixing with another user's data
+        setHistory([]);
+        
+        // Load from Supabase for authenticated users
         try {
           const { data, error } = await supabase
             .from('query_history')
@@ -61,10 +46,15 @@ export function HistoryProvider({ children }: { children: ReactNode }) {
             .eq('user_id', user.id)
             .order('created_at', { ascending: false });
             
-          if (error) throw error;
+          if (error) {
+            console.error('Failed to fetch history from Supabase:', error);
+            return;
+          }
           
           if (data && data.length > 0) {
-            // Process the entries and remove duplicates
+            console.log(`Loaded ${data.length} history items for user ${user.id}`);
+            
+            // Process the entries
             const processedData = data.map((item: any) => ({
               id: item.id,
               query: item.query,
@@ -74,22 +64,51 @@ export function HistoryProvider({ children }: { children: ReactNode }) {
             
             // Remove duplicates based on query content
             const uniqueEntries = removeDuplicates(processedData);
-            
-            // Use Supabase data as source of truth
             setHistory(uniqueEntries);
-            
-            // Update localStorage with this cleaned history
-            localStorage.setItem('assistant_history', JSON.stringify(uniqueEntries));
+          } else {
+            console.log("No history found for user", user.id);
+            setHistory([]);
           }
         } catch (error) {
           console.error('Failed to fetch history from Supabase', error);
+          setHistory([]);
+        }
+      } else {
+        // For anonymous users, use localStorage but make sure we don't load another user's data
+        setHistory([]);
+        
+        // Only use localStorage for anonymous users
+        const savedHistory = localStorage.getItem('assistant_history_anonymous');
+        if (savedHistory) {
+          try {
+            const parsedHistory = JSON.parse(savedHistory);
+            // Convert string timestamps back to Date objects
+            const formattedHistory = parsedHistory.map((item: any) => ({
+              ...item,
+              timestamp: new Date(item.timestamp),
+              response: item.response || "No response stored"
+            }));
+            
+            const uniqueItems = removeDuplicates(formattedHistory);
+            setHistory(uniqueItems);
+          } catch (error) {
+            console.error('Failed to parse history from localStorage', error);
+            setHistory([]);
+          }
         }
       }
     };
     
     loadHistory();
-  }, [user]);
-
+    
+    // Clear history when user logs out
+    return () => {
+      if (!user) {
+        console.log("User logged out, clearing history state");
+      }
+    };
+  }, [user?.id]); // Dependency on user.id ensures reload when user changes
+  
   // Helper function to remove duplicates based on query content and timestamp proximity
   const removeDuplicates = (items: HistoryItem[]): HistoryItem[] => {
     const seen = new Map<string, HistoryItem>();
@@ -114,16 +133,19 @@ export function HistoryProvider({ children }: { children: ReactNode }) {
     return Array.from(seen.values());
   };
 
-  // Save history to localStorage whenever it changes
+  // Save history to localStorage for anonymous users
   useEffect(() => {
-    localStorage.setItem('assistant_history', JSON.stringify(history));
-  }, [history]);
+    if (!user) {
+      // Only save to localStorage for anonymous users
+      localStorage.setItem('assistant_history_anonymous', JSON.stringify(history));
+    }
+  }, [history, user]);
 
   // Add a new query and response to history
   const addToHistory = async (query: string, response: string) => {
     if (!query.trim()) return;
     
-    // Process the response to remove Markdown asterisks
+    // Clean response by removing Markdown formatting
     const cleanedResponse = response.replace(/\*\*/g, ''); // Remove double asterisks
     
     // Generate a consistent ID based on query content and timestamp
@@ -162,6 +184,7 @@ export function HistoryProvider({ children }: { children: ReactNode }) {
     
     // Update database if user is logged in
     if (user) {
+      console.log(`Saving query for user ${user.id}: ${query}`);
       try {
         if (existingItemIndex !== -1) {
           // Update existing entry in database
@@ -172,7 +195,8 @@ export function HistoryProvider({ children }: { children: ReactNode }) {
               response: cleanedResponse,
               created_at: now.toISOString()
             })
-            .eq('id', existingItem.id);
+            .eq('id', existingItem.id)
+            .eq('user_id', user.id);
         } else {
           // Insert new entry
           await supabase
@@ -188,13 +212,17 @@ export function HistoryProvider({ children }: { children: ReactNode }) {
       } catch (error) {
         console.error('Failed to save query to Supabase', error);
       }
+    } else {
+      // For anonymous users, save to localStorage
+      localStorage.setItem('assistant_history_anonymous', JSON.stringify(updatedHistory));
     }
   };
 
   // Clear all history
   const clearHistory = async () => {
+    console.log("Clearing history for user:", user?.id || "anonymous");
+    
     setHistory([]);
-    localStorage.removeItem('assistant_history');
     
     if (user) {
       try {
@@ -205,6 +233,8 @@ export function HistoryProvider({ children }: { children: ReactNode }) {
       } catch (error) {
         console.error('Failed to clear history from Supabase', error);
       }
+    } else {
+      localStorage.removeItem('assistant_history_anonymous');
     }
   };
 
@@ -217,7 +247,6 @@ export function HistoryProvider({ children }: { children: ReactNode }) {
       queryCounts[queryLower] = (queryCounts[queryLower] || 0) + 1;
     });
     
-    // Explicitly typing the return value to fix the excessive depth error
     return Object.entries(queryCounts)
       .map((entry): QueryStats => ({ 
         query: entry[0], 
