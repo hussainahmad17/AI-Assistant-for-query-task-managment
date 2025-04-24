@@ -1,8 +1,8 @@
-# Welcome to your Lovable project
+# Welcome to my project
 
 ## Project info
 
-**URL**: https://ai-assistant-for-query-task-managment.vercel.app/landing
+**URL**:   https://ai-assistant-for-query-task-managment.vercel.app/landing
 
 ## What technologies are used for this project?
 
