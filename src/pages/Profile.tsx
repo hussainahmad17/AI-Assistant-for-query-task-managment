@@ -39,54 +39,34 @@ const Profile = () => {
     try {
       setLoading(true);
       
-      // First, check if profile exists
-      const { data: profileData, error: profileError } = await supabase
+      // Fetch profile data
+      const { data, error } = await supabase
         .from('profiles')
-        .select('username, full_name, avatar_url')
+        .select('username, full_name, avatar_url, bio')
         .eq('id', user.id)
         .single();
       
-      if (profileError) {
-        console.error('Error fetching profile:', profileError);
-        if (profileError.message && profileError.message.includes("returned no results")) {
+      if (error) {
+        // If profile doesn't exist, create a new one
+        if (error.message && error.message.includes("returned no results")) {
           await createNewProfile();
           return;
         } else {
-          throw profileError;
+          throw error;
         }
       }
       
-      // If the profile exists, set the state values
-      if (profileData) {
-        setUsername(profileData.username || '');
-        setFullName(profileData.full_name || '');
-        if (profileData.avatar_url) {
-          setAvatarUrl(profileData.avatar_url);
+      if (data) {
+        // Set the profile data
+        setUsername(data.username || '');
+        setFullName(data.full_name || '');
+        
+        if (data.avatar_url) {
+          setAvatarUrl(data.avatar_url);
         }
         
-        // Try to fetch bio separately
-        try {
-          // Check if bio column exists first
-          const { data: columnsData } = await supabase
-            .from('profiles')
-            .select('bio')
-            .limit(0);
-          
-          // If bio column exists, fetch the user's bio
-          if (columnsData !== null) {
-            const { data: userBioData } = await supabase
-              .from('profiles')
-              .select('bio')
-              .eq('id', user.id)
-              .single();
-            
-            if (userBioData && typeof userBioData.bio === 'string') {
-              setBio(userBioData.bio);
-            }
-          }
-        } catch (bioError) {
-          console.log('Bio field might not exist yet:', bioError);
-          setBio("");
+        if (data.bio) {
+          setBio(data.bio || '');
         }
       }
     } catch (error) {
@@ -110,10 +90,10 @@ const Profile = () => {
         username: user.email?.split('@')[0] || '',
         full_name: '',
         avatar_url: '',
+        bio: '',
         updated_at: new Date().toISOString(),
       };
       
-      // Don't include bio field in case it doesn't exist
       const { error } = await supabase
         .from('profiles')
         .insert(updates);
@@ -123,13 +103,22 @@ const Profile = () => {
       }
       
       setUsername(updates.username);
+      toast({
+        title: "Success",
+        description: "Profile created successfully",
+      });
     } catch (error) {
       console.error('Error creating new profile:', error);
+      toast({
+        title: "Error",
+        description: "Failed to create profile",
+        variant: "destructive",
+      });
     }
   };
 
   const handleAvatarUpload = async (event: React.ChangeEvent<HTMLInputElement>) => {
-    if (!event.target.files || event.target.files.length === 0) {
+    if (!event.target.files || event.target.files.length === 0 || !user) {
       return;
     }
     
@@ -137,51 +126,48 @@ const Profile = () => {
       setUploading(true);
       const file = event.target.files[0];
       const fileExt = file.name.split('.').pop();
-      const fileName = `${user?.id}-${Math.random().toString(36).substring(2)}.${fileExt}`;
-      const filePath = `avatars/${fileName}`;
+      const fileName = `${user.id}-${Math.random().toString(36).substring(2)}.${fileExt}`;
+      const filePath = `${fileName}`;
       
-      // Check if avatars bucket exists, create if not
-      const { data: buckets } = await supabase.storage.listBuckets();
-      const avatarBucketExists = buckets?.some(bucket => bucket.name === 'avatars');
-      
-      if (!avatarBucketExists) {
-        await supabase.storage.createBucket('avatars', {
-          public: true,
-          fileSizeLimit: 5242880 // 5MB
-        });
-      }
-      
-      const { error: uploadError } = await supabase
+      // Upload the file to Supabase storage
+      const { error: uploadError, data } = await supabase
         .storage
         .from('avatars')
-        .upload(filePath, file);
+        .upload(filePath, file, {
+          cacheControl: '3600',
+          upsert: true
+        });
         
       if (uploadError) throw uploadError;
       
-      const { data } = supabase
+      // Get the public URL
+      const { data: publicUrlData } = supabase
         .storage
         .from('avatars')
         .getPublicUrl(filePath);
         
-      if (data && data.publicUrl) {
-        setAvatarUrl(data.publicUrl);
-        
-        // Update profile with new avatar URL
-        const { error: updateError } = await supabase
-          .from('profiles')
-          .update({ 
-            avatar_url: data.publicUrl,
-            updated_at: new Date().toISOString()
-          })
-          .eq('id', user?.id);
-          
-        if (updateError) throw updateError;
-        
-        toast({
-          title: "Success",
-          description: "Avatar uploaded successfully",
-        });
+      if (!publicUrlData || !publicUrlData.publicUrl) {
+        throw new Error('Failed to get public URL for avatar');
       }
+      
+      const publicUrl = publicUrlData.publicUrl;
+      setAvatarUrl(publicUrl);
+      
+      // Update profile with new avatar URL
+      const { error: updateError } = await supabase
+        .from('profiles')
+        .update({ 
+          avatar_url: publicUrl,
+          updated_at: new Date().toISOString()
+        })
+        .eq('id', user.id);
+        
+      if (updateError) throw updateError;
+      
+      toast({
+        title: "Success",
+        description: "Avatar uploaded successfully",
+      });
     } catch (error: any) {
       console.error('Error uploading avatar:', error);
       toast({
@@ -200,35 +186,20 @@ const Profile = () => {
     try {
       setLoading(true);
       
-      // Base updates without bio
-      const baseUpdates = {
+      const updates = {
         username,
         full_name: fullName,
         avatar_url: avatarUrl,
+        bio,
         updated_at: new Date().toISOString(),
       };
       
-      // First try updating with bio included
       const { error } = await supabase
         .from('profiles')
-        .update({
-          ...baseUpdates,
-          bio
-        })
+        .update(updates)
         .eq('id', user.id);
       
-      // If there's an error and it's about the bio column, try without bio
-      if (error && error.message && error.message.includes('bio')) {
-        console.log('Updating without bio field');
-        const { error: baseError } = await supabase
-          .from('profiles')
-          .update(baseUpdates)
-          .eq('id', user.id);
-          
-        if (baseError) throw baseError;
-      } else if (error) {
-        throw error;
-      }
+      if (error) throw error;
       
       toast({
         title: "Success",

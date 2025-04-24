@@ -1,4 +1,3 @@
-
 import React, { useEffect, useState } from "react";
 import MainLayout from "@/components/layouts/MainLayout";
 import { useHistory } from "@/contexts/HistoryContext";
@@ -26,10 +25,8 @@ const ChatHistory = () => {
   }, []);
 
   useEffect(() => {
-    // Filter history based on search and active tab
     let filtered = history;
     
-    // Apply search filter
     if (searchQuery) {
       filtered = filtered.filter((item) => 
         item.query.toLowerCase().includes(searchQuery.toLowerCase()) || 
@@ -37,7 +34,6 @@ const ChatHistory = () => {
       );
     }
     
-    // Apply tab filter
     if (activeTab === "today") {
       const today = new Date();
       today.setHours(0, 0, 0, 0);
@@ -52,7 +48,6 @@ const ChatHistory = () => {
       filtered = filtered.filter(item => new Date(item.timestamp) >= monthAgo);
     }
     
-    // Remove potential duplicates based on timestamp and query
     const uniqueItems = new Map();
     filtered.forEach(item => {
       const key = `${item.query}-${new Date(item.timestamp).getTime()}`;
@@ -93,7 +88,6 @@ const ChatHistory = () => {
   };
 
   const downloadHistory = () => {
-    // Create a plain text version for download
     let textContent = "# Chat History Export\n\n";
     
     history.forEach((item, index) => {
@@ -126,9 +120,9 @@ const ChatHistory = () => {
     return date.toLocaleString();
   };
 
-  // Clean up markdown formatting for display
   const cleanupMarkdown = (text: string) => {
-    return text.replace(/\*\*/g, '');
+    if (!text) return "";
+    return text.replace(/\*\*/g, '').replace(/\*/g, '');
   };
 
   return (
