@@ -8,7 +8,7 @@ import Admin from "@/pages/Admin";
 import Auth from "@/pages/Auth";
 import Login from "@/pages/Login";
 import Register from "@/pages/Register";
-import { AuthProvider } from "./contexts/AuthContext";
+import { AuthProvider, RequireVerifiedEmail } from "./contexts/AuthContext";
 import { AssistantProvider } from "./contexts/AssistantContext";
 import { HistoryProvider } from "./contexts/HistoryContext";
 import ChatHistory from "@/pages/ChatHistory";
@@ -17,6 +17,7 @@ import AuthLayout from "@/components/layouts/AuthLayout";
 import Dashboard from "@/pages/Dashboard";
 import Profile from "@/pages/Profile";
 import Help from "@/pages/Help";
+import VerificationRequired from "@/pages/VerificationRequired";
 
 // Create routes configuration
 const routes = [
@@ -30,27 +31,27 @@ const routes = [
   },
   {
     path: "/chat",
-    element: <Chat />,
+    element: <RequireVerifiedEmail><Chat /></RequireVerifiedEmail>,
   },
   {
     path: "/chat-history",
-    element: <ChatHistory />,
+    element: <RequireVerifiedEmail><ChatHistory /></RequireVerifiedEmail>,
   },
   {
     path: "/dashboard",
-    element: <Dashboard />,
+    element: <RequireVerifiedEmail><Dashboard /></RequireVerifiedEmail>,
   },
   {
     path: "/admin",
-    element: <Admin />,
+    element: <RequireVerifiedEmail><Admin /></RequireVerifiedEmail>,
   },
   {
     path: "/profile",
-    element: <Profile />,
+    element: <RequireVerifiedEmail><Profile /></RequireVerifiedEmail>,
   },
   {
     path: "/help",
-    element: <Help />,
+    element: <RequireVerifiedEmail><Help /></RequireVerifiedEmail>,
   },
   {
     path: "/auth",
@@ -58,7 +59,7 @@ const routes = [
     children: [
       {
         path: "",
-        element: <Login />,
+        element: <Auth />,
       },
       {
         path: "login",
@@ -67,6 +68,10 @@ const routes = [
       {
         path: "register",
         element: <Register />,
+      },
+      {
+        path: "verification-required",
+        element: <VerificationRequired />,
       }
     ],
   },

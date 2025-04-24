@@ -39,6 +39,8 @@ const Profile = () => {
     try {
       setLoading(true);
       
+      console.log("Fetching profile for user ID:", user.id);
+      
       // Fetch profile data
       const { data, error } = await supabase
         .from('profiles')
@@ -47,6 +49,7 @@ const Profile = () => {
         .single();
       
       if (error) {
+        console.error("Profile fetch error:", error);
         // If profile doesn't exist, create a new one
         if (error.message && error.message.includes("returned no results")) {
           await createNewProfile();
@@ -56,16 +59,19 @@ const Profile = () => {
         }
       }
       
+      console.log("Profile data fetched:", data);
+      
       if (data) {
         // Set the profile data
         setUsername(data.username || '');
         setFullName(data.full_name || '');
         
         if (data.avatar_url) {
+          console.log("Setting avatar URL:", data.avatar_url);
           setAvatarUrl(data.avatar_url);
         }
         
-        if (data.bio) {
+        if (data.bio !== null) {
           setBio(data.bio || '');
         }
       }
@@ -94,11 +100,14 @@ const Profile = () => {
         updated_at: new Date().toISOString(),
       };
       
+      console.log("Creating new profile with:", updates);
+      
       const { error } = await supabase
         .from('profiles')
         .insert(updates);
         
       if (error) {
+        console.error("Error creating profile:", error);
         throw error;
       }
       
@@ -129,6 +138,8 @@ const Profile = () => {
       const fileName = `${user.id}-${Math.random().toString(36).substring(2)}.${fileExt}`;
       const filePath = `${fileName}`;
       
+      console.log("Uploading avatar:", filePath);
+      
       // Upload the file to Supabase storage
       const { error: uploadError, data } = await supabase
         .storage
@@ -138,7 +149,12 @@ const Profile = () => {
           upsert: true
         });
         
-      if (uploadError) throw uploadError;
+      if (uploadError) {
+        console.error("Avatar upload error:", uploadError);
+        throw uploadError;
+      }
+      
+      console.log("Upload successful, getting public URL");
       
       // Get the public URL
       const { data: publicUrlData } = supabase
@@ -151,9 +167,12 @@ const Profile = () => {
       }
       
       const publicUrl = publicUrlData.publicUrl;
+      console.log("Public URL obtained:", publicUrl);
+      
       setAvatarUrl(publicUrl);
       
       // Update profile with new avatar URL
+      console.log("Updating profile with avatar URL");
       const { error: updateError } = await supabase
         .from('profiles')
         .update({ 
@@ -162,7 +181,10 @@ const Profile = () => {
         })
         .eq('id', user.id);
         
-      if (updateError) throw updateError;
+      if (updateError) {
+        console.error("Profile update error:", updateError);
+        throw updateError;
+      }
       
       toast({
         title: "Success",
@@ -194,12 +216,17 @@ const Profile = () => {
         updated_at: new Date().toISOString(),
       };
       
+      console.log("Updating profile with:", updates);
+      
       const { error } = await supabase
         .from('profiles')
         .update(updates)
         .eq('id', user.id);
       
-      if (error) throw error;
+      if (error) {
+        console.error("Profile update error:", error);
+        throw error;
+      }
       
       toast({
         title: "Success",
@@ -243,8 +270,11 @@ const Profile = () => {
               <div className="flex flex-col items-center sm:items-start sm:flex-row gap-4">
                 <div className="relative">
                   <Avatar className="h-24 w-24 ring-2 ring-primary/20 ring-offset-2">
-                    <AvatarImage src={avatarUrl} alt={fullName || username} />
-                    <AvatarFallback className="text-xl bg-primary text-primary-foreground">{userInitial}</AvatarFallback>
+                    {avatarUrl ? (
+                      <AvatarImage src={avatarUrl} alt={fullName || username} />
+                    ) : (
+                      <AvatarFallback className="text-xl bg-primary text-primary-foreground">{userInitial}</AvatarFallback>
+                    )}
                   </Avatar>
                   <Button
                     size="icon"
@@ -337,6 +367,17 @@ const Profile = () => {
                 />
                 <p className="text-xs text-muted-foreground">
                   Your account email address (cannot be changed)
+                </p>
+              </div>
+              
+              <div className="space-y-2">
+                <Label>Email Verification</Label>
+                <div className="flex h-10 w-full items-center justify-between rounded-md border border-input bg-muted/50 px-3 py-2 text-sm">
+                  <span>{user?.email_confirmed_at ? "Verified" : "Not verified"}</span>
+                  <div className={`h-2 w-2 rounded-full ${user?.email_confirmed_at ? "bg-green-500" : "bg-red-500"}`}></div>
+                </div>
+                <p className="text-xs text-muted-foreground">
+                  Status of your email verification
                 </p>
               </div>
               
