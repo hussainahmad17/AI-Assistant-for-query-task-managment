@@ -1,4 +1,3 @@
-
 import React, { createContext, useContext, useState, useEffect, ReactNode, useCallback } from "react";
 import { useToast } from "@/hooks/use-toast";
 import { loadGlobalSettings } from "@/utils/globalSettings";
@@ -38,13 +37,19 @@ export function AssistantProvider({ children }: { children: ReactNode }) {
   // Define addMessage before using it in any other function
   const addMessage = useCallback(
     async (content: string, role: 'user' | 'assistant') => {
+      console.log(`Adding ${role} message:`, content);
       const newMessage: Message = {
         id: Date.now().toString(),
         content,
         role,
         timestamp: new Date(),
       };
-      setMessages((prev) => [...prev, newMessage]);
+      setMessages((prev) => {
+        console.log("Previous messages count:", prev.length);
+        const updated = [...prev, newMessage];
+        console.log("Updated messages count:", updated.length);
+        return updated;
+      });
       
       if (role === "assistant" && settings?.voiceEnabled) {
         speakMessage(content);
@@ -52,25 +57,30 @@ export function AssistantProvider({ children }: { children: ReactNode }) {
       
       if (user) {
         try {
-          await (supabase.from('conversation_history') as any).insert([{
+          console.log("Saving message to Supabase for user:", user.id);
+          await supabase.from('conversation_history').insert([{
             user_id: user.id,
             content,
             role,
             created_at: new Date().toISOString()
           }]);
+          console.log("Message saved to Supabase successfully");
         } catch (error) {
           console.error('Failed to save conversation to Supabase', error);
         }
       }
     },
-    [settings, user]
+    [settings, user, supabase]
   );
 
   const { isSpeaking, speakMessage, stopSpeaking } = useAssistantSpeech(settings);
 
   const sendMessage = useCallback(
     async (content: string) => {
+      console.log("sendMessage called with:", content);
+      
       if (!apiKey) {
+        console.error("No API key found");
         toast({
           title: 'API Key Missing',
           description: 'Please set your Gemini API key in the settings.',
@@ -78,27 +88,36 @@ export function AssistantProvider({ children }: { children: ReactNode }) {
         });
         return;
       }
+
       try {
         setIsProcessing(true);
-        if (messages.length === 0 || messages[messages.length - 1].role !== 'user') {
-          await addMessage(content, 'user');
-        }
+        console.log("Processing started");
+        
+        // Add user message first
+        await addMessage(content, 'user');
+        
         if (settings?.analyticsCollection !== false) {
           addToHistory(content, ""); // Initialize with empty response, will update later
         }
+        
         const contextSize = settings?.maxContext || 10;
         const recentMessages = messages.slice(-contextSize).map(msg => ({
           role: msg.role,
           parts: [{ text: msg.content }]
         }));
+        
         const systemPrompt = settings?.systemPrompt || defaultSettings.systemPrompt;
         const allMessages = systemPrompt ? [
           { role: 'user', parts: [{ text: systemPrompt }] },
           { role: 'assistant', parts: [{ text: 'I understand and will follow these instructions.' }] },
           ...recentMessages
         ] : recentMessages;
+        
         const modelName = settings?.model || "gemini-1.5-pro";
         const temp = settings?.temperature || 0.7;
+        
+        console.log("Making API call to Gemini with model:", modelName);
+        
         const response = await fetch(`https://generativelanguage.googleapis.com/v1beta/models/${modelName}:generateContent?key=${apiKey}`, {
           method: 'POST',
           headers: {
@@ -138,9 +157,14 @@ export function AssistantProvider({ children }: { children: ReactNode }) {
             ]
           }),
         });
+        
+        console.log("API response status:", response.status);
+        
         if (!response.ok) {
           const errorData = await response.json();
+          console.error("API error:", errorData);
           const errorMessage = errorData.error?.message || 'Unknown error';
+          
           if (errorMessage.includes('overloaded') && retryCount < 3) {
             setRetryCount(prev => prev + 1);
             toast({
@@ -151,14 +175,20 @@ export function AssistantProvider({ children }: { children: ReactNode }) {
             setTimeout(() => sendMessage(content), 2000);
             return;
           }
+          
           throw new Error(`API Error: ${errorMessage}`);
         }
+        
         setRetryCount(0);
         const data = await response.json();
+        console.log("API response data:", data);
+        
         if (data.candidates && data.candidates.length > 0 && 
             data.candidates[0].content && data.candidates[0].content.parts && 
             data.candidates[0].content.parts.length > 0) {
           const assistantResponse = data.candidates[0].content.parts[0].text;
+          console.log("Assistant response:", assistantResponse);
+          
           await addMessage(assistantResponse, 'assistant');
           
           // Update the history with the response
@@ -166,6 +196,7 @@ export function AssistantProvider({ children }: { children: ReactNode }) {
             addToHistory(content, assistantResponse);
           }
         } else {
+          console.error("Invalid response format:", data);
           throw new Error('Invalid response format from Gemini API');
         }
       } catch (error) {
@@ -177,6 +208,7 @@ export function AssistantProvider({ children }: { children: ReactNode }) {
         });
       } finally {
         setIsProcessing(false);
+        console.log("Processing finished");
       }
     },
     [apiKey, messages, settings, addMessage, addToHistory, toast, retryCount]
@@ -222,7 +254,6 @@ export function AssistantProvider({ children }: { children: ReactNode }) {
     }
   };
 
-  // Now that addMessage and sendMessage are defined, we can use them in the effect
   useEffect(() => {
     if (inputToProcess) {
       (async () => {
@@ -241,8 +272,9 @@ export function AssistantProvider({ children }: { children: ReactNode }) {
       
       if (user) {
         try {
-          const { data, error } = await (supabase
-            .from('conversation_history') as any)
+          console.log("Loading conversation history for user:", user.id);
+          const { data, error } = await supabase
+            .from('conversation_history')
             .select('*')
             .eq('user_id', user.id)
             .order('created_at', { ascending: true });
@@ -250,6 +282,7 @@ export function AssistantProvider({ children }: { children: ReactNode }) {
           if (error) throw error;
           
           if (data && data.length > 0) {
+            console.log("Loaded conversation history:", data.length, "messages");
             const supabaseMessages = data.map((item: any) => ({
               id: item.id,
               content: item.content,
@@ -258,10 +291,15 @@ export function AssistantProvider({ children }: { children: ReactNode }) {
             }));
             
             setMessages(supabaseMessages);
+          } else {
+            console.log("No conversation history found");
           }
         } catch (error) {
           console.error('Failed to fetch conversation history from Supabase', error);
         }
+      } else {
+        console.log("No user found, clearing messages");
+        setMessages([]);
       }
     };
     
@@ -274,6 +312,7 @@ export function AssistantProvider({ children }: { children: ReactNode }) {
         const savedApiKey = localStorage.getItem('gemini_api_key');
         if (savedApiKey) {
           setApiKey(savedApiKey);
+          console.log("API key loaded from localStorage");
         }
         
         const dbSettings = await loadGlobalSettings();
@@ -318,12 +357,14 @@ export function AssistantProvider({ children }: { children: ReactNode }) {
   }, [apiKey]);
 
   const clearConversation = useCallback(async () => {
+    console.log("Clearing conversation");
     setMessages([]);
     stopSpeaking();
     localStorage.removeItem("conversation_history");
     if (user) {
       try {
-        await (supabase.from('conversation_history') as any).delete().eq('user_id', user.id);
+        await supabase.from('conversation_history').delete().eq('user_id', user.id);
+        console.log("Conversation cleared from Supabase");
       } catch (error) {
         console.error('Failed to clear conversation from Supabase', error);
       }

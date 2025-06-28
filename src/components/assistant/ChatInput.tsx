@@ -5,14 +5,12 @@ import { Button } from "@/components/ui/button";
 import { Textarea } from "@/components/ui/textarea";
 import { Mic, MicOff, Send, Loader2 } from "lucide-react";
 import { useAssistant } from "@/contexts/AssistantContext";
-import { useHistory } from "@/contexts/HistoryContext";
 import { useToast } from "@/hooks/use-toast";
 
 export const ChatInput = () => {
   const [input, setInput] = useState("");
   const [isSpeechSupported, setIsSpeechSupported] = useState<boolean | null>(null);
   const { isProcessing, sendMessage, isListening, toggleListening } = useAssistant();
-  const { addToHistory } = useHistory();
   const { toast } = useToast();
   const textareaRef = useRef<HTMLTextAreaElement>(null);
 
@@ -32,13 +30,26 @@ export const ChatInput = () => {
   const handleSubmit = async (e: FormEvent) => {
     e.preventDefault();
     
-    if (!input.trim() || isProcessing) return;
+    if (!input.trim() || isProcessing) {
+      console.log("Input is empty or already processing");
+      return;
+    }
     
     const message = input.trim();
+    console.log("Sending message:", message);
     setInput("");
     
-    // Send the message to the assistant context
-    await sendMessage(message);
+    try {
+      // Send the message to the assistant context
+      await sendMessage(message);
+    } catch (error) {
+      console.error("Error sending message:", error);
+      toast({
+        title: "Error",
+        description: "Failed to send message. Please try again.",
+        variant: "destructive",
+      });
+    }
   };
 
   // Focus the textarea when not listening

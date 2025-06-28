@@ -14,13 +14,18 @@ export const ApiKeyForm = () => {
   const [isValidating, setIsValidating] = useState(false);
   const [error, setError] = useState("");
   
-  const DEFAULT_API_KEY = "YOUR-GEMINI-API-KEY"; // Add a default API key for testing
+  // Use a working test API key
+  const TEST_API_KEY = "AIzaSyDpX7eoKGtN7nU5TcjnRfr0fPkUtaJNPFY";
 
   // Load API key from localStorage if available
   useEffect(() => {
     const savedApiKey = localStorage.getItem('gemini_api_key');
     if (savedApiKey) {
+      console.log("Found saved API key");
       setApiKey(savedApiKey);
+    } else {
+      // Set default API key for testing
+      setApiKeyInput(TEST_API_KEY);
     }
   }, [setApiKey]);
 
@@ -32,21 +37,41 @@ export const ApiKeyForm = () => {
       return;
     }
     
+    console.log("Validating API key:", apiKeyInput.substring(0, 10) + "...");
     setIsValidating(true);
     setError("");
     
     try {
-      // Simulate API key validation (replace with actual validation in production)
-      await new Promise(resolve => setTimeout(resolve, 1000));
+      // Test the API key with a simple request
+      const testResponse = await fetch(`https://generativelanguage.googleapis.com/v1beta/models/gemini-1.5-pro:generateContent?key=${apiKeyInput.trim()}`, {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify({
+          contents: [{
+            role: 'user',
+            parts: [{ text: 'Hello' }]
+          }],
+          generationConfig: {
+            temperature: 0.7,
+            topK: 40,
+            topP: 0.95,
+            maxOutputTokens: 10,
+          }
+        }),
+      });
       
-      // Check if API key format is valid (basic check)
-      if (!apiKeyInput.includes("AI") && !apiKeyInput.startsWith("g-") && apiKeyInput !== DEFAULT_API_KEY) {
-        throw new Error("Invalid API key format. Gemini API keys typically start with 'AI' or 'g-'");
+      if (!testResponse.ok) {
+        const errorData = await testResponse.json();
+        throw new Error(errorData.error?.message || "Invalid API key");
       }
       
+      console.log("API key validation successful");
       setApiKey(apiKeyInput.trim());
       localStorage.setItem('gemini_api_key', apiKeyInput.trim());
     } catch (err: any) {
+      console.error("API key validation failed:", err);
       setError(err.message || "Failed to validate API key");
     } finally {
       setIsValidating(false);
@@ -66,11 +91,7 @@ export const ApiKeyForm = () => {
           </CardTitle>
           <CardDescription>
             Enter your Gemini API key to start using the AI assistant.
-            {DEFAULT_API_KEY !== "YOUR-GEMINI-API-KEY" && (
-              <span className="block mt-1 text-xs">
-                For testing, you can use the pre-filled key.
-              </span>
-            )}
+            A test key is pre-filled for demonstration purposes.
           </CardDescription>
         </CardHeader>
         <form onSubmit={handleSubmit}>
@@ -84,7 +105,7 @@ export const ApiKeyForm = () => {
             <div className="space-y-1">
               <Input
                 type="password"
-                placeholder={DEFAULT_API_KEY}
+                placeholder="Enter your Gemini API key"
                 value={apiKeyInput}
                 onChange={(e) => setApiKeyInput(e.target.value)}
                 className="font-mono"
